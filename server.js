@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from "./src/routes/auth.js";
+import disasterRoutes from "./src/routes/disasterRoutes.js";
+import helpRequestRoutes from "./src/routes/helpRequestRoutes.js";
 import "./src/firebaseAdmin.js";
 
 dotenv.config();
@@ -13,7 +15,10 @@ app.get("/", (req, res) => {
   res.json({ message: "Backend is running!" });
 });
 
+// API Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/disasters", disasterRoutes);
+app.use("/api/help-requests", helpRequestRoutes);
 
 const PORT = process.env.PORT || 5000;
 
@@ -22,6 +27,8 @@ const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📡 API endpoints available at http://localhost:${PORT}`);
   console.log(`🔐 Auth endpoints: /api/auth/register, /api/auth/login`);
+  console.log(`🌪️  Disaster endpoints: /api/disasters`);
+  console.log(`🆘 Help Request endpoints: /api/help-requests`);
   console.log(`Press Ctrl+C to stop the server`);
 });
 

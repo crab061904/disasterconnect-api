@@ -44,9 +44,30 @@ Runs on http://localhost:5000
 
 ## 📡 API Endpoints
 
-- `GET /` - Health check
+### Quick Reference
+
+**Authentication:**
 - `POST /api/auth/register` - Register new user
 - `POST /api/auth/login` - Login user
+- `GET /api/auth/profile` - Get user profile (auth required)
+
+**Disasters:**
+- `GET /api/disasters/active` - Get active disasters
+- `GET /api/disasters/nearby` - Get nearby disasters
+- `GET /api/disasters/:id` - Get disaster by ID
+- `POST /api/disasters` - Create disaster report (auth required)
+- `PUT /api/disasters/:id` - Update disaster (auth required)
+- `DELETE /api/disasters/:id` - Delete disaster (auth required)
+
+**Help Requests:**
+- `GET /api/help-requests/pending` - Get pending help requests
+- `GET /api/help-requests/disaster/:disasterId` - Get requests by disaster
+- `GET /api/help-requests/:id` - Get help request by ID
+- `POST /api/help-requests` - Create help request (auth required)
+- `PATCH /api/help-requests/:id/assign` - Assign request (auth required)
+- `PATCH /api/help-requests/:id/fulfill` - Mark as fulfilled (auth required)
+
+📖 **[View Complete API Documentation](./API_DOCUMENTATION.md)** - Detailed documentation with request/response examples
 
 ---
 
@@ -54,10 +75,13 @@ Runs on http://localhost:5000
 
 Required:
 - `FIREBASE_SERVICE_ACCOUNT_JSON` - Firebase Admin SDK credentials
+- `JWT_SECRET` - Secret key for JWT token generation (optional, defaults to "change-me")
+- `JWT_EXPIRES_IN` - JWT token expiration time (optional, defaults to "7d")
 
 ---
 
 ## 📚 Documentation
 
+- **[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)** - Complete API reference with all endpoints
 - **VERCEL_DEPLOY.md** - Complete deployment guide
 - **DEPLOYMENT.md** - Alternative deployment options
