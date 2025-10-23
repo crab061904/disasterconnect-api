@@ -15,7 +15,7 @@ function createJwt(user) {
 export const authController = {
 	async register(req, res) {
 		try {
-			const { email, password, name, role } = req.body || {};
+			const { email, password, name, role, profileData } = req.body || {};
 			
 			// Validation using base controller
 			const validationError = BaseController.validateRequired(req.body, ['email', 'password']);
@@ -32,13 +32,14 @@ export const authController = {
 			// Hash password
 			const passwordHash = await bcrypt.hash(password, 10);
 
-			// Create user
+			// Create user with profile data
 			const userDoc = usersCol.doc();
 			const userData = { 
 				email, 
 				name: name || "", 
 				role: role || "citizen", 
 				passwordHash, 
+				...profileData, // Spread profile data (location, skills, orgName, etc.)
 				createdAt: new Date().toISOString() 
 			};
 			await userDoc.set(userData);
@@ -112,7 +113,7 @@ export const authController = {
 
 	async googleLogin(req, res) {
 		try {
-			const { idToken, role } = req.body || {};
+			const { idToken, role, profileData } = req.body || {};
 			
 			// Validation
 			const validationError = BaseController.validateRequired(req.body, ['idToken']);
@@ -143,7 +144,12 @@ export const authController = {
 				userId = doc.id;
 				user = { id: userId, ...doc.data() };
 			} else {
-				// Create new user
+				// New user - require role and profileData
+				if (!role) {
+					return BaseController.error(res, "User does not exist. Please complete registration.", 404);
+				}
+				
+				// Create new user with profile data
 				const userDoc = usersCol.doc();
 				userId = userDoc.id;
 				const userData = {
@@ -152,6 +158,7 @@ export const authController = {
 					role: role || "citizen",
 					firebaseUid,
 					authProvider: "google",
+					...profileData, // Spread profile data
 					createdAt: new Date().toISOString()
 				};
 				await userDoc.set(userData);
