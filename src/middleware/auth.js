@@ -1,6 +1,10 @@
 import jwt from "jsonwebtoken";
 
-export function requireAuth(req, res, next) {
+/**
+ * Middleware to verify JWT token and authenticate requests
+ * Extracts token from Authorization header and validates it
+ */
+export function verifyToken(req, res, next) {
 	const header = req.headers.authorization || "";
 	const token = header.startsWith("Bearer ") ? header.slice(7) : null;
 	if (!token) return res.status(401).json({ error: "Missing bearer token" });
@@ -12,4 +16,7 @@ export function requireAuth(req, res, next) {
 		return res.status(401).json({ error: "Invalid or expired token" });
 	}
 }
+
+// Alias for backward compatibility
+export const requireAuth = verifyToken;
 

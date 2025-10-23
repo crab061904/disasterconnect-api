@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { firestore } from "../firebaseAdmin.js";
+import { firestore, auth as adminAuth } from "../firebaseAdmin.js";
 import { BaseController } from "./BaseController.js";
 
 const usersCol = firestore.collection("users");
@@ -106,6 +106,78 @@ export const authController = {
 			}, "Login successful");
 
 		} catch (err) {
+			return BaseController.error(res, "Internal server error", 500, err.message);
+		}
+	},
+
+	async googleLogin(req, res) {
+		try {
+			const { idToken, role } = req.body || {};
+			
+			// Validation
+			const validationError = BaseController.validateRequired(req.body, ['idToken']);
+			if (validationError) {
+				return BaseController.error(res, validationError, 400);
+			}
+
+			// Verify the Firebase ID token
+			let decodedToken;
+			try {
+				decodedToken = await adminAuth.verifyIdToken(idToken);
+			} catch (error) {
+				console.error('Token verification failed:', error);
+				return BaseController.error(res, "Invalid Google token", 401);
+			}
+
+			const { email, name, uid: firebaseUid } = decodedToken;
+
+			// Check if user already exists
+			const existingSnap = await usersCol.where("email", "==", email).limit(1).get();
+			
+			let user;
+			let userId;
+
+			if (!existingSnap.empty) {
+				// User exists, log them in
+				const doc = existingSnap.docs[0];
+				userId = doc.id;
+				user = { id: userId, ...doc.data() };
+			} else {
+				// Create new user
+				const userDoc = usersCol.doc();
+				userId = userDoc.id;
+				const userData = {
+					email,
+					name: name || email.split('@')[0],
+					role: role || "citizen",
+					firebaseUid,
+					authProvider: "google",
+					createdAt: new Date().toISOString()
+				};
+				await userDoc.set(userData);
+				user = { id: userId, ...userData };
+			}
+
+			// Generate JWT token
+			const token = createJwt({ 
+				id: userId, 
+				email: user.email, 
+				role: user.role 
+			});
+
+			// Return success response
+			return BaseController.success(res, { 
+				token, 
+				user: { 
+					id: userId, 
+					email: user.email, 
+					name: user.name || "", 
+					role: user.role || "citizen" 
+				} 
+			}, "Google login successful");
+
+		} catch (err) {
+			console.error('Google login error:', err);
 			return BaseController.error(res, "Internal server error", 500, err.message);
 		}
 	},
