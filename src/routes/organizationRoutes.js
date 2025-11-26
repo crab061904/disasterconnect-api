@@ -52,7 +52,14 @@ router.post("/:orgId/announcements", organizationController.createAnnouncement);
 // Evacuation Centers
 router.get("/:orgId/centers", organizationController.getEvacuationCenters);
 router.post("/:orgId/centers", organizationController.createEvacuationCenter);
-
+router.put(
+  "/:orgId/centers/:centerId",
+  organizationController.updateEvacuationCenter
+);
+router.delete(
+  "/:orgId/centers/:centerId",
+  organizationController.deleteEvacuationCenter
+);
 // Reports
 router.get("/:orgId/reports", organizationController.getReports);
 router.post("/:orgId/reports", organizationController.createReport);
