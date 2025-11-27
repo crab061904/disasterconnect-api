@@ -42,6 +42,40 @@ class OrganizationController {
 
       const orgRef = await firestore.collection("organizations").add(orgData);
 
+      // Update user's organizations array using uid from JWT
+      // Note: uid in JWT is the user's document ID
+      const usersCol = firestore.collection("users");
+      const userDoc = usersCol.doc(uid);
+      const userSnapshot = await userDoc.get();
+      
+      if (userSnapshot.exists) {
+        const userData = userSnapshot.data();
+        const currentOrgs = userData.organizations || [];
+        
+        // Add organization ID if not already present
+        if (!currentOrgs.includes(orgRef.id)) {
+          await userDoc.update({
+            organizations: [...currentOrgs, orgRef.id],
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+      } else {
+        // If user document doesn't exist by uid, try to find by email
+        const userQuery = await usersCol.where("email", "==", email).limit(1).get();
+        if (!userQuery.empty) {
+          const foundUserDoc = userQuery.docs[0];
+          const userData = foundUserDoc.data();
+          const currentOrgs = userData.organizations || [];
+          
+          if (!currentOrgs.includes(orgRef.id)) {
+            await foundUserDoc.ref.update({
+              organizations: [...currentOrgs, orgRef.id],
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+          }
+        }
+      }
+
       res.status(201).json({
         id: orgRef.id,
         message: "Organization created successfully",
@@ -123,6 +157,82 @@ class OrganizationController {
     } catch (error) {
       console.error("Error creating announcement:", error);
       res.status(500).json({ error: "Failed to create announcement" });
+    }
+  }
+
+  async updateAnnouncement(req, res) {
+    try {
+      const { orgId, announcementId } = req.params;
+      const { title, body, status } = req.body;
+
+      const updateData = {
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      if (title !== undefined) updateData.title = title;
+      if (body !== undefined) updateData.body = body;
+      if (status !== undefined) updateData.status = status.toLowerCase();
+
+      await firestore
+        .collection("organizations")
+        .doc(orgId)
+        .collection("announcements")
+        .doc(announcementId)
+        .update(updateData);
+
+      const updatedDoc = await firestore
+        .collection("organizations")
+        .doc(orgId)
+        .collection("announcements")
+        .doc(announcementId)
+        .get();
+
+      if (!updatedDoc.exists) {
+        return res.status(404).json({ error: "Announcement not found" });
+      }
+
+      const updatedData = updatedDoc.data();
+
+      res.json({
+        message: "Announcement updated successfully",
+        announcement: {
+          id: updatedDoc.id,
+          ...updatedData,
+          createdAt: updatedData.createdAt?.toDate(),
+          updatedAt: updatedData.updatedAt?.toDate(),
+          date: updatedData.date?.toDate(),
+        },
+      });
+    } catch (error) {
+      console.error("Error updating announcement:", error);
+      res.status(500).json({ error: "Failed to update announcement" });
+    }
+  }
+
+  async deleteAnnouncement(req, res) {
+    try {
+      const { orgId, announcementId } = req.params;
+
+      const docRef = firestore
+        .collection("organizations")
+        .doc(orgId)
+        .collection("announcements")
+        .doc(announcementId);
+
+      const doc = await docRef.get();
+      if (!doc.exists) {
+        return res.status(404).json({ error: "Announcement not found" });
+      }
+
+      await docRef.delete();
+
+      res.json({
+        message: "Announcement deleted successfully",
+        announcementId,
+      });
+    } catch (error) {
+      console.error("Error deleting announcement:", error);
+      res.status(500).json({ error: "Failed to delete announcement" });
     }
   }
 
@@ -327,7 +437,7 @@ class OrganizationController {
     try {
       const { orgId } = req.params;
       const { title, content, status = "pending", type = "general" } = req.body;
-      const { uid, name } = req.user;
+      const { uid, email } = req.user;
 
       if (!title || !content) {
         return res.status(400).json({
@@ -340,7 +450,7 @@ class OrganizationController {
         content,
         status: status.toLowerCase(),
         type: type.toLowerCase(),
-        author: name || "Unknown",
+        author: email || "Unknown",
         authorUid: uid,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
@@ -363,6 +473,83 @@ class OrganizationController {
     } catch (error) {
       console.error("Error creating report:", error);
       res.status(500).json({ error: "Failed to create report" });
+    }
+  }
+
+  async updateReport(req, res) {
+    try {
+      const { orgId, reportId } = req.params;
+      const { title, content, status, type } = req.body;
+
+      const updateData = {
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      if (title !== undefined) updateData.title = title;
+      if (content !== undefined) updateData.content = content;
+      if (status !== undefined) updateData.status = status.toLowerCase();
+      if (type !== undefined) updateData.type = type.toLowerCase();
+
+      await firestore
+        .collection("organizations")
+        .doc(orgId)
+        .collection("reports")
+        .doc(reportId)
+        .update(updateData);
+
+      const updatedDoc = await firestore
+        .collection("organizations")
+        .doc(orgId)
+        .collection("reports")
+        .doc(reportId)
+        .get();
+
+      if (!updatedDoc.exists) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+
+      const updatedData = updatedDoc.data();
+
+      res.json({
+        message: "Report updated successfully",
+        report: {
+          id: updatedDoc.id,
+          ...updatedData,
+          createdAt: updatedData.createdAt?.toDate(),
+          updatedAt: updatedData.updatedAt?.toDate(),
+          date: updatedData.date?.toDate(),
+        },
+      });
+    } catch (error) {
+      console.error("Error updating report:", error);
+      res.status(500).json({ error: "Failed to update report" });
+    }
+  }
+
+  async deleteReport(req, res) {
+    try {
+      const { orgId, reportId } = req.params;
+
+      const docRef = firestore
+        .collection("organizations")
+        .doc(orgId)
+        .collection("reports")
+        .doc(reportId);
+
+      const doc = await docRef.get();
+      if (!doc.exists) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+
+      await docRef.delete();
+
+      res.json({
+        message: "Report deleted successfully",
+        reportId,
+      });
+    } catch (error) {
+      console.error("Error deleting report:", error);
+      res.status(500).json({ error: "Failed to delete report" });
     }
   }
 
@@ -395,6 +582,46 @@ class OrganizationController {
     }
   }
 
+  async createResource(req, res) {
+    try {
+      const { orgId } = req.params;
+      const { name, quantity, unit, category } = req.body;
+
+      if (!name || quantity === undefined) {
+        return res.status(400).json({
+          error: "Name and quantity are required",
+        });
+      }
+
+      const resourceData = {
+        name,
+        quantity: Number(quantity),
+        unit: unit || "",
+        category: category || "",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      const resourceRef = await firestore
+        .collection("organizations")
+        .doc(orgId)
+        .collection("resources")
+        .add(resourceData);
+
+      res.status(201).json({
+        id: resourceRef.id,
+        message: "Resource created successfully",
+        resource: {
+          id: resourceRef.id,
+          ...resourceData,
+        },
+      });
+    } catch (error) {
+      console.error("Error creating resource:", error);
+      res.status(500).json({ error: "Failed to create resource" });
+    }
+  }
+
   async updateResource(req, res) {
     try {
       const { orgId, resourceId } = req.params;
@@ -405,9 +632,9 @@ class OrganizationController {
       };
 
       if (quantity !== undefined) updateData.quantity = Number(quantity);
-      if (name) updateData.name = name;
-      if (unit) updateData.unit = unit;
-      if (category) updateData.category = category;
+      if (name !== undefined) updateData.name = name;
+      if (unit !== undefined) updateData.unit = unit;
+      if (category !== undefined) updateData.category = category;
 
       await firestore
         .collection("organizations")
@@ -416,14 +643,58 @@ class OrganizationController {
         .doc(resourceId)
         .update(updateData);
 
+      const updatedDoc = await firestore
+        .collection("organizations")
+        .doc(orgId)
+        .collection("resources")
+        .doc(resourceId)
+        .get();
+
+      if (!updatedDoc.exists) {
+        return res.status(404).json({ error: "Resource not found" });
+      }
+
+      const updatedData = updatedDoc.data();
+
       res.json({
         message: "Resource updated successfully",
-        resourceId,
-        updates: updateData,
+        resource: {
+          id: updatedDoc.id,
+          ...updatedData,
+          updatedAt: updatedData.updatedAt?.toDate(),
+          createdAt: updatedData.createdAt?.toDate(),
+        },
       });
     } catch (error) {
       console.error("Error updating resource:", error);
       res.status(500).json({ error: "Failed to update resource" });
+    }
+  }
+
+  async deleteResource(req, res) {
+    try {
+      const { orgId, resourceId } = req.params;
+
+      const docRef = firestore
+        .collection("organizations")
+        .doc(orgId)
+        .collection("resources")
+        .doc(resourceId);
+
+      const doc = await docRef.get();
+      if (!doc.exists) {
+        return res.status(404).json({ error: "Resource not found" });
+      }
+
+      await docRef.delete();
+
+      res.json({
+        message: "Resource deleted successfully",
+        resourceId,
+      });
+    } catch (error) {
+      console.error("Error deleting resource:", error);
+      res.status(500).json({ error: "Failed to delete resource" });
     }
   }
 

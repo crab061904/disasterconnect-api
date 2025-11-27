@@ -48,6 +48,8 @@ router.use("/:orgId", verifyOrgAccess);
 // Announcements
 router.get("/:orgId/announcements", organizationController.getAnnouncements);
 router.post("/:orgId/announcements", organizationController.createAnnouncement);
+router.put("/:orgId/announcements/:announcementId", organizationController.updateAnnouncement);
+router.delete("/:orgId/announcements/:announcementId", organizationController.deleteAnnouncement);
 
 // Evacuation Centers
 router.get("/:orgId/centers", organizationController.getEvacuationCenters);
@@ -64,12 +66,19 @@ router.delete(
 // Reports
 router.get("/:orgId/reports", organizationController.getReports);
 router.post("/:orgId/reports", organizationController.createReport);
+router.put("/:orgId/reports/:reportId", organizationController.updateReport);
+router.delete("/:orgId/reports/:reportId", organizationController.deleteReport);
 
 // Resources
 router.get("/:orgId/resources", organizationController.getResources);
+router.post("/:orgId/resources", organizationController.createResource);
 router.put(
   "/:orgId/resources/:resourceId",
   organizationController.updateResource
+);
+router.delete(
+  "/:orgId/resources/:resourceId",
+  organizationController.deleteResource
 );
 
 // Volunteers
