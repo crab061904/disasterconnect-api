@@ -102,52 +102,70 @@ export const authController = {
   },
 
   async login(req, res) {
-    try {
-      const { email, password } = req.body;
-      
-      // Validation
-      const validationError = BaseController.validateRequired(req.body, ['email', 'password']);
-      if (validationError) {
-        return BaseController.error(res, validationError, 400);
-      }
-
-      // Find user by email
-      const snap = await usersCol.where("email", "==", email).limit(1).get();
-      if (snap.empty) {
-        return BaseController.error(res, "Invalid credentials", 401);
-      }
-
-      const doc = snap.docs[0];
-      const user = { id: doc.id, ...doc.data() };
-
-      // Verify password
-      const isValidPassword = await bcrypt.compare(password, user.passwordHash || "");
-      if (!isValidPassword) {
-        return BaseController.error(res, "Invalid credentials", 401);
-      }
-
-      // Generate token
-      const token = createJwt(user);
-
-      // Don't send password hash in response
-      delete user.passwordHash;
-
-      return BaseController.success(res, { 
-        token, 
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          roles: user.roles || [],
-          isVolunteer: user.isVolunteer || false
-        }
-      }, "Login successful");
-
-    } catch (err) {
-      console.error("Login error:", err);
-      return BaseController.error(res, "Internal server error", 500, err.message);
+  try {
+    const { email, password, role } = req.body;
+    
+    // Validation
+    const validationError = BaseController.validateRequired(req.body, ['email', 'password', 'role']);
+    if (validationError) {
+      return BaseController.error(res, validationError, 400);
     }
-  },
+
+    // Find user by email
+    const snap = await usersCol.where("email", "==", email).limit(1).get();
+    if (snap.empty) {
+      return BaseController.error(res, "Invalid credentials", 401);
+    }
+
+    const doc = snap.docs[0];
+    const user = { id: doc.id, ...doc.data() };
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.passwordHash || "");
+    if (!isValidPassword) {
+      return BaseController.error(res, "Invalid credentials", 401);
+    }
+
+    // Validate role
+    if (role) {
+      // Check if the selected role is valid
+      const validRoles = ['user', 'volunteer', 'organization'];
+      if (!validRoles.includes(role)) {
+        return BaseController.error(res, "Invalid role selected", 400);
+      }
+
+      // Check if user has the selected role
+      if (!user.roles?.includes(role)) {
+        return BaseController.error(res, `You don't have permission to access the ${role} portal. Please select a role you are registered for.`, 403);
+      }
+    }
+
+    // Generate token with the selected role
+    const token = createJwt({
+      ...user,
+      currentRole: role || user.roles[0] // Store the selected role in the token
+    });
+
+    // Don't send password hash in response
+    delete user.passwordHash;
+
+    return BaseController.success(res, { 
+      token, 
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        roles: user.roles || [],
+        currentRole: role || user.roles[0],
+        isVolunteer: user.isVolunteer || false
+      }
+    }, "Login successful");
+
+  } catch (err) {
+    console.error("Login error:", err);
+    return BaseController.error(res, "Internal server error", 500, err.message);
+  }
+},
 
   async googleLogin(req, res) {
     try {
