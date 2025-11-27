@@ -1,6 +1,6 @@
 import express from "express";
 import { helpRequestController } from "../controllers/index.js";
-import { verifyToken } from "../middleware/auth.js";
+import { authenticate } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -48,7 +48,7 @@ router.get("/:id", helpRequestController.getHelpRequestById);
  * Body: { disasterId, title, description, urgency, type, location, contactInfo, numberOfPeople, images }
  * Use Case: People in need request assistance (medical, food, rescue, shelter, etc.)
  */
-router.post("/", verifyToken, helpRequestController.createHelpRequest);
+router.post("/", authenticate, helpRequestController.createHelpRequest);
 
 /**
  * PUT /api/help-requests/:id
@@ -58,7 +58,7 @@ router.post("/", verifyToken, helpRequestController.createHelpRequest);
  * Body: Any help request fields to update
  * Use Case: Update request details, urgency level, or number of people affected
  */
-router.put("/:id", verifyToken, helpRequestController.updateHelpRequest);
+router.put("/:id", authenticate, helpRequestController.updateHelpRequest);
 
 /**
  * PATCH /api/help-requests/:id/assign
@@ -68,7 +68,7 @@ router.put("/:id", verifyToken, helpRequestController.updateHelpRequest);
  * Body: { assigneeUid: "volunteer123" }
  * Use Case: Volunteers/organizations claim responsibility for fulfilling a request
  */
-router.patch("/:id/assign", verifyToken, helpRequestController.assignHelpRequest);
+router.patch("/:id/assign", authenticate, helpRequestController.assignHelpRequest);
 
 /**
  * PATCH /api/help-requests/:id/fulfill
@@ -77,7 +77,7 @@ router.patch("/:id/assign", verifyToken, helpRequestController.assignHelpRequest
  * Params: :id (help request ID)
  * Use Case: Mark request as completed after assistance has been provided
  */
-router.patch("/:id/fulfill", verifyToken, helpRequestController.fulfillHelpRequest);
+router.patch("/:id/fulfill", authenticate, helpRequestController.fulfillHelpRequest);
 
 /**
  * PATCH /api/help-requests/:id/status
@@ -87,7 +87,7 @@ router.patch("/:id/fulfill", verifyToken, helpRequestController.fulfillHelpReque
  * Body: { status: "pending" | "in_progress" | "fulfilled" | "cancelled" }
  * Use Case: Track progress of help request through its lifecycle
  */
-router.patch("/:id/status", verifyToken, helpRequestController.updateHelpRequestStatus);
+router.patch("/:id/status", authenticate, helpRequestController.updateHelpRequestStatus);
 
 /**
  * DELETE /api/help-requests/:id
@@ -96,6 +96,6 @@ router.patch("/:id/status", verifyToken, helpRequestController.updateHelpRequest
  * Params: :id (help request ID)
  * Use Case: Delete duplicate, resolved, or invalid help requests
  */
-router.delete("/:id", verifyToken, helpRequestController.deleteHelpRequest);
+router.delete("/:id", authenticate, helpRequestController.deleteHelpRequest);
 
 export default router;

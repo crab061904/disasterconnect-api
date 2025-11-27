@@ -1,6 +1,6 @@
 import express from "express";
 import { disasterController } from "../controllers/index.js";
-import { verifyToken } from "../middleware/auth.js";
+import { authenticate } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -57,7 +57,7 @@ router.get("/:id", disasterController.getDisasterById);
  * Body: { title, description, type, severity, location, images, casualties, needsHelp }
  * Use Case: Citizens, volunteers, or organizations report new disasters
  */
-router.post("/", verifyToken, disasterController.createDisaster);
+router.post("/", authenticate, disasterController.createDisaster);
 
 /**
  * PUT /api/disasters/:id
@@ -67,7 +67,7 @@ router.post("/", verifyToken, disasterController.createDisaster);
  * Body: Any disaster fields to update
  * Use Case: Update disaster information as situation evolves
  */
-router.put("/:id", verifyToken, disasterController.updateDisaster);
+router.put("/:id", authenticate, disasterController.updateDisaster);
 
 /**
  * PATCH /api/disasters/:id/status
@@ -77,7 +77,7 @@ router.put("/:id", verifyToken, disasterController.updateDisaster);
  * Body: { status: "active" | "resolved" | "monitoring" }
  * Use Case: Update disaster lifecycle status
  */
-router.patch("/:id/status", verifyToken, disasterController.updateDisasterStatus);
+router.patch("/:id/status", authenticate, disasterController.updateDisasterStatus);
 
 /**
  * PATCH /api/disasters/:id/verify
@@ -86,7 +86,7 @@ router.patch("/:id/status", verifyToken, disasterController.updateDisasterStatus
  * Params: :id (disaster ID)
  * Use Case: Admins verify reports to prevent false information
  */
-router.patch("/:id/verify", verifyToken, disasterController.verifyDisaster);
+router.patch("/:id/verify", authenticate, disasterController.verifyDisaster);
 
 /**
  * DELETE /api/disasters/:id
@@ -95,6 +95,6 @@ router.patch("/:id/verify", verifyToken, disasterController.verifyDisaster);
  * Params: :id (disaster ID)
  * Use Case: Delete false reports or outdated information
  */
-router.delete("/:id", verifyToken, disasterController.deleteDisaster);
+router.delete("/:id", authenticate, disasterController.deleteDisaster);
 
 export default router;

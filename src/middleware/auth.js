@@ -1,22 +1,66 @@
-import jwt from "jsonwebtoken";
+// File: API-BACK/disasterconnect-api/src/middleware/auth.js
+import jwt from 'jsonwebtoken';
+import User from '../models/User.js';
 
-/**
- * Middleware to verify JWT token and authenticate requests
- * Extracts token from Authorization header and validates it
- */
-export function verifyToken(req, res, next) {
-	const header = req.headers.authorization || "";
-	const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-	if (!token) return res.status(401).json({ error: "Missing bearer token" });
-	try {
-		const payload = jwt.verify(token, process.env.JWT_SECRET || "change-me");
-		req.user = payload;
-		return next();
-	} catch (err) {
-		return res.status(401).json({ error: "Invalid or expired token" });
-	}
-}
+export const authenticate = async (req, res, next) => {
+  try {
+    // Get token from header
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ 
+        success: false,
+        message: 'No token, authorization denied' 
+      });
+    }
 
-// Alias for backward compatibility
-export const requireAuth = verifyToken;
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'change-me');
+    
+    // Get user from database
+    const user = await User.getById(decoded.uid);
+    if (!user) {
+      return res.status(401).json({ 
+        success: false,
+        message: 'User not found' 
+      });
+    }
 
+    // Add user to request object
+    req.user = {
+      uid: user.uid,
+      email: user.email,
+      roles: user.roles || [],
+      isVolunteer: user.isVolunteer || false
+    };
+
+    next();
+  } catch (err) {
+    console.error('Authentication error:', err);
+    return res.status(401).json({ 
+      success: false,
+      message: 'Token is not valid' 
+    });
+  }
+};
+
+// Role-based access control middleware
+export const authorize = (roles = []) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ 
+        success: false,
+        message: 'Not authenticated' 
+      });
+    }
+
+    if (roles.length && !roles.some(role => req.user.roles.includes(role))) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Not authorized to access this resource' 
+      });
+    }
+
+    next();
+  };
+};
