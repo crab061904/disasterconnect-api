@@ -60,6 +60,7 @@ router.delete(
   "/:orgId/centers/:centerId",
   organizationController.deleteEvacuationCenter
 );
+
 // Reports
 router.get("/:orgId/reports", organizationController.getReports);
 router.post("/:orgId/reports", organizationController.createReport);

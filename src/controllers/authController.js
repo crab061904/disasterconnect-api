@@ -9,70 +9,85 @@ function createJwt(user) {
   const payload = {
     uid: user.id,
     email: user.email,
-    role: user.role || "citizen",
+    roles: user.roles || [],
+    activeRole: user.activeRole || "citizen",
+    organizations: user.organizations || [],
   };
+
   const secret = process.env.JWT_SECRET || "change-me";
   const expiresIn = process.env.JWT_EXPIRES_IN || "7d";
+
   return jwt.sign(payload, secret, { expiresIn });
 }
 
 export const authController = {
+  // ================= REGISTER ==================
   async register(req, res) {
     try {
-      const { email, password, name, role, profileData } = req.body || {};
+      const { email, password, name, role, profileData = {} } = req.body || {};
 
-      // Validation using base controller
       const validationError = BaseController.validateRequired(req.body, [
         "email",
         "password",
+        "role",
       ]);
       if (validationError) {
         return BaseController.error(res, validationError, 400);
       }
 
-      // Check if email already exists
       const existing = await usersCol
         .where("email", "==", email)
         .limit(1)
         .get();
+
       if (!existing.empty) {
         return BaseController.error(res, "Email already registered", 409);
       }
 
-      // Hash password
       const passwordHash = await bcrypt.hash(password, 10);
 
-      // Create user with profile data
-      const userDoc = usersCol.doc();
       const userData = {
         email,
-        name: name || "",
-        role: role || "citizen",
+        displayName: name || email.split("@")[0],
         passwordHash,
-        ...profileData, // Spread profile data (location, skills, orgName, etc.)
+
+        roles: [role], // ✅ MULTI ROLE
+        activeRole: role, // ✅ ACTIVE ROLE
+        organizations: [], // ✅ ORG ARRAY
+
+        isVerified: false,
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+
+        ...profileData,
       };
+
+      const userDoc = usersCol.doc();
       await userDoc.set(userData);
 
-      // Generate token
-      const token = createJwt({ id: userDoc.id, email, role: userData.role });
+      const token = createJwt({
+        id: userDoc.id,
+        ...userData,
+      });
 
-      // Return success response
       return BaseController.success(
         res,
         {
           token,
           user: {
             id: userDoc.id,
-            email,
-            name: userData.name,
-            role: userData.role,
+            email: userData.email,
+            displayName: userData.displayName,
+            roles: userData.roles,
+            activeRole: userData.activeRole,
+            organizations: userData.organizations,
           },
         },
         "User registered successfully",
         201
       );
     } catch (err) {
+      console.error("Registration error:", err);
       return BaseController.error(
         res,
         "Internal server error",
@@ -82,11 +97,11 @@ export const authController = {
     }
   },
 
+  // ================= LOGIN ==================
   async login(req, res) {
     try {
       const { email, password } = req.body || {};
 
-      // Validation using base controller
       const validationError = BaseController.validateRequired(req.body, [
         "email",
         "password",
@@ -95,8 +110,8 @@ export const authController = {
         return BaseController.error(res, validationError, 400);
       }
 
-      // Find user by email
       const snap = await usersCol.where("email", "==", email).limit(1).get();
+
       if (snap.empty) {
         return BaseController.error(res, "Invalid credentials", 401);
       }
@@ -104,23 +119,17 @@ export const authController = {
       const doc = snap.docs[0];
       const user = { id: doc.id, ...doc.data() };
 
-      // Verify password
       const isValidPassword = await bcrypt.compare(
         password,
         user.passwordHash || ""
       );
+
       if (!isValidPassword) {
         return BaseController.error(res, "Invalid credentials", 401);
       }
 
-      // Generate token
-      const token = createJwt({
-        id: user.id,
-        email: user.email,
-        role: user.role,
-      });
+      const token = createJwt(user);
 
-      // Return success response
       return BaseController.success(
         res,
         {
@@ -128,13 +137,16 @@ export const authController = {
           user: {
             id: user.id,
             email: user.email,
-            name: user.name || "",
-            role: user.role || "citizen",
+            displayName: user.displayName || "",
+            roles: user.roles || [],
+            activeRole: user.activeRole || "citizen",
+            organizations: user.organizations || [],
           },
         },
         "Login successful"
       );
     } catch (err) {
+      console.error("Login error:", err);
       return BaseController.error(
         res,
         "Internal server error",
@@ -144,11 +156,11 @@ export const authController = {
     }
   },
 
+  // ================= GOOGLE LOGIN ==================
   async googleLogin(req, res) {
     try {
-      const { idToken, role, profileData } = req.body || {};
+      const { idToken, role, roles, profileData = {} } = req.body || {};
 
-      // Validation
       const validationError = BaseController.validateRequired(req.body, [
         "idToken",
       ]);
@@ -156,7 +168,6 @@ export const authController = {
         return BaseController.error(res, validationError, 400);
       }
 
-      // Verify the Firebase ID token
       let decodedToken;
       try {
         decodedToken = await adminAuth.verifyIdToken(idToken);
@@ -167,7 +178,6 @@ export const authController = {
 
       const { email, name, uid: firebaseUid } = decodedToken;
 
-      // Check if user already exists
       const existingSnap = await usersCol
         .where("email", "==", email)
         .limit(1)
@@ -177,44 +187,49 @@ export const authController = {
       let userId;
 
       if (!existingSnap.empty) {
-        // User exists, log them in
+        // User exists - return existing user
         const doc = existingSnap.docs[0];
         userId = doc.id;
         user = { id: userId, ...doc.data() };
       } else {
-        // New user - require role and profileData
-        if (!role) {
+        // User doesn't exist - need role(s) to create account
+        // Support both 'role' (single) and 'roles' (array) for backward compatibility
+        const userRoles = roles || (role ? [role] : []);
+        
+        if (!userRoles || userRoles.length === 0) {
+          // Return 401 (Unauthorized) instead of 404 to indicate user needs to complete registration
           return BaseController.error(
             res,
             "User does not exist. Please complete registration.",
-            404
+            401
           );
         }
 
-        // Create new user with profile data
         const userDoc = usersCol.doc();
         userId = userDoc.id;
-        const userData = {
+
+        user = {
           email,
-          name: name || email.split("@")[0],
-          role: role || "citizen",
+          displayName: name || email.split("@")[0],
           firebaseUid,
           authProvider: "google",
-          ...profileData, // Spread profile data
+
+          roles: userRoles, // Support multiple roles
+          activeRole: userRoles[0], // Set first role as active
+          organizations: [],
+
           createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+
+          ...profileData,
         };
-        await userDoc.set(userData);
-        user = { id: userId, ...userData };
+
+        await userDoc.set(user);
+        user.id = userId;
       }
 
-      // Generate JWT token
-      const token = createJwt({
-        id: userId,
-        email: user.email,
-        role: user.role,
-      });
+      const token = createJwt(user);
 
-      // Return success response
       return BaseController.success(
         res,
         {
@@ -222,8 +237,10 @@ export const authController = {
           user: {
             id: userId,
             email: user.email,
-            name: user.name || "",
-            role: user.role || "citizen",
+            displayName: user.displayName,
+            roles: user.roles || [],
+            activeRole: user.activeRole || (user.roles && user.roles[0]) || "citizen",
+            organizations: user.organizations || [],
           },
         },
         "Google login successful"
@@ -239,17 +256,20 @@ export const authController = {
     }
   },
 
+  // ================= PROFILE ==================
   async getProfile(req, res) {
     try {
-      // This would be used with the auth middleware
       const user = req.user;
+
       return BaseController.success(
         res,
         {
           user: {
             id: user.uid,
             email: user.email,
-            role: user.role,
+            roles: user.roles,
+            activeRole: user.activeRole,
+            organizations: user.organizations,
           },
         },
         "Profile retrieved successfully"

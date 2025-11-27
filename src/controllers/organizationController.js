@@ -207,6 +207,93 @@ class OrganizationController {
     }
   }
 
+  // Add this method to OrganizationController class
+  async updateEvacuationCenter(req, res) {
+    try {
+      const { orgId, centerId } = req.params;
+      const { name, address, head, contact, capacity, occupied, lat, lng } =
+        req.body;
+
+      const updateData = {
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      // Only update fields that are provided in the request
+      if (name !== undefined) updateData.name = name;
+      if (address !== undefined) updateData.address = address;
+      if (head !== undefined) updateData.head = head;
+      if (contact !== undefined) updateData.contact = contact;
+      if (capacity !== undefined) updateData.capacity = Number(capacity);
+      if (occupied !== undefined) updateData.occupied = Number(occupied);
+      if (lat !== undefined) updateData.lat = lat ? Number(lat) : null;
+      if (lng !== undefined) updateData.lng = lng ? Number(lng) : null;
+
+      await firestore
+        .collection("organizations")
+        .doc(orgId)
+        .collection("centers")
+        .doc(centerId)
+        .update(updateData);
+
+      // Get the updated document
+      const updatedDoc = await firestore
+        .collection("organizations")
+        .doc(orgId)
+        .collection("centers")
+        .doc(centerId)
+        .get();
+
+      if (!updatedDoc.exists) {
+        return res.status(404).json({ error: "Evacuation center not found" });
+      }
+
+      const updatedData = updatedDoc.data();
+
+      res.json({
+        message: "Evacuation center updated successfully",
+        center: {
+          id: updatedDoc.id,
+          ...updatedData,
+          // Convert Firestore timestamps to Date objects
+          createdAt: updatedData.createdAt?.toDate(),
+          updatedAt: updatedData.updatedAt?.toDate(),
+        },
+      });
+    } catch (error) {
+      console.error("Error updating evacuation center:", error);
+      res.status(500).json({ error: "Failed to update evacuation center" });
+    }
+  }
+
+  async deleteEvacuationCenter(req, res) {
+    try {
+      const { orgId, centerId } = req.params;
+
+      // First check if the document exists
+      const docRef = firestore
+        .collection("organizations")
+        .doc(orgId)
+        .collection("centers")
+        .doc(centerId);
+
+      const doc = await docRef.get();
+      if (!doc.exists) {
+        return res.status(404).json({ error: "Evacuation center not found" });
+      }
+
+      // Delete the document
+      await docRef.delete();
+
+      res.json({
+        message: "Evacuation center deleted successfully",
+        centerId,
+      });
+    } catch (error) {
+      console.error("Error deleting evacuation center:", error);
+      res.status(500).json({ error: "Failed to delete evacuation center" });
+    }
+  }
+
   // Reports
   async getReports(req, res) {
     try {
