@@ -9,8 +9,6 @@ const router = express.Router();
 router.post('/register', authController.register);
 router.post('/login', authController.login);
 router.post('/google', authController.googleLogin);
-
-// Protected routes
 router.get('/profile', authenticate, authController.getProfile);
 router.patch('/users/:userId/roles', authenticate, authController.updateRoles);
 
