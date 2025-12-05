@@ -11,7 +11,9 @@
     "dev": "node -r dotenv/config server.js",
     "start": "node -r dotenv/config server.js",
     "vercel-build": "echo 'Building for Vercel...'",
-    "deploy": "vercel --prod"
+    "deploy": "vercel --prod",
+    "test": "jest --detectOpenHandles --forceExit",
+    "test:watch": "jest --watch"
   },
   "keywords": [],
   "author": "",
@@ -27,6 +29,8 @@
     "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
-    "dotenv": "^17.2.3"
+    "dotenv": "^17.2.3",
+    "jest": "^30.2.0",
+    "supertest": "^7.1.4"
   }
 }

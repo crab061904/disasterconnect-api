@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { firestore, auth as adminAuth } from "../firebaseAdmin.js";
 import { BaseController } from "./BaseController.js";
+import { User } from "../models/index.js"; // Ensure User model is imported
 
 const usersCol = firestore.collection("users");
 
@@ -11,7 +12,9 @@ function createJwt(user) {
     uid: user.uid || user.id, 
     email: user.email, 
     roles: user.roles || ["user"],
-    isVolunteer: user.isVolunteer || false
+    isVolunteer: user.isVolunteer || false,
+    // Add currentRole to the token so frontend knows which dashboard to render
+    currentRole: user.currentRole || (user.roles && user.roles[0]) || "user"
   };
   const secret = process.env.JWT_SECRET || "change-me";
   const expiresIn = process.env.JWT_EXPIRES_IN || "7d";
@@ -25,8 +28,7 @@ export const authController = {
         email, 
         password, 
         name, 
-        role, // 'individual' or 'organization'
-        isVolunteer = false,
+        role, // Frontend sends: 'civilian', 'volunteer', or 'organization'
         profileData = {} 
       } = req.body;
       
@@ -36,8 +38,9 @@ export const authController = {
         return BaseController.error(res, validationError, 400);
       }
 
-      if (!['individual', 'organization'].includes(role)) {
-        return BaseController.error(res, "Invalid role. Must be 'individual' or 'organization'", 400);
+      const allowedRoles = ['civilian', 'individual', 'volunteer', 'organization'];
+      if (!allowedRoles.includes(role)) {
+        return BaseController.error(res, "Invalid role selection.", 400);
       }
 
       // Check if email exists
@@ -49,13 +52,20 @@ export const authController = {
       // Hash password
       const passwordHash = await bcrypt.hash(password, 10);
 
-      // Determine roles
-      const roles = ["user"]; // Base role for all users
-      if (role === 'organization') {
-        roles.push("organization");
-      } else if (isVolunteer) {
-        roles.push("volunteer");
+      // --- ROLE ASSIGNMENT LOGIC ---
+      let roles = ["user"]; // Everyone is a user/civilian by default
+      let isVolunteer = false;
+
+      if (role === 'volunteer') {
+        // If signing up as volunteer, they get BOTH roles
+        roles.push("volunteer"); 
+        isVolunteer = true;
+      } 
+      else if (role === 'organization') {
+        // Organization is distinct, usually doesn't have 'user' role
+        roles = ["organization"];
       }
+      // If role === 'civilian' or 'individual', they stay as ["user"]
 
       // Create user document
       const userDoc = usersCol.doc();
@@ -64,8 +74,8 @@ export const authController = {
         email, 
         displayName: name || email.split('@')[0],
         name: name || "",
-        roles,
-        isVolunteer: roles.includes("volunteer"),
+        roles, // Stores ["user", "volunteer"] or ["user"]
+        isVolunteer,
         passwordHash,
         ...profileData,
         isVerified: false,
@@ -80,7 +90,8 @@ export const authController = {
         id: userDoc.id, 
         email, 
         roles,
-        isVolunteer: roles.includes("volunteer")
+        isVolunteer,
+        currentRole: role === 'civilian' ? 'user' : role // Set initial context
       });
 
       // Return success response
@@ -91,7 +102,7 @@ export const authController = {
           email, 
           name: userData.name, 
           roles,
-          isVolunteer: roles.includes("volunteer")
+          isVolunteer
         } 
       }, "User registered successfully", 201);
 
@@ -102,70 +113,73 @@ export const authController = {
   },
 
   async login(req, res) {
-  try {
-    const { email, password, role } = req.body;
-    
-    // Validation
-    const validationError = BaseController.validateRequired(req.body, ['email', 'password', 'role']);
-    if (validationError) {
-      return BaseController.error(res, validationError, 400);
-    }
-
-    // Find user by email
-    const snap = await usersCol.where("email", "==", email).limit(1).get();
-    if (snap.empty) {
-      return BaseController.error(res, "Invalid credentials", 401);
-    }
-
-    const doc = snap.docs[0];
-    const user = { id: doc.id, ...doc.data() };
-
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.passwordHash || "");
-    if (!isValidPassword) {
-      return BaseController.error(res, "Invalid credentials", 401);
-    }
-
-    // Validate role
-    if (role) {
-      // Check if the selected role is valid
-      const validRoles = ['user', 'volunteer', 'organization'];
-      if (!validRoles.includes(role)) {
-        return BaseController.error(res, "Invalid role selected", 400);
+    try {
+      // role here is the TARGET dashboard user wants to enter ('civilian', 'volunteer', 'organization')
+      const { email, password, role } = req.body;
+      
+      // Validation
+      const validationError = BaseController.validateRequired(req.body, ['email', 'password']);
+      if (validationError) {
+        return BaseController.error(res, validationError, 400);
       }
 
-      // Check if user has the selected role
-      if (!user.roles?.includes(role)) {
-        return BaseController.error(res, `You don't have permission to access the ${role} portal. Please select a role you are registered for.`, 403);
+      // Find user by email
+      const snap = await usersCol.where("email", "==", email).limit(1).get();
+      if (snap.empty) {
+        return BaseController.error(res, "Invalid credentials", 401);
       }
+
+      const doc = snap.docs[0];
+      const user = { id: doc.id, ...doc.data() };
+
+      // Verify password
+      const isValidPassword = await bcrypt.compare(password, user.passwordHash || "");
+      if (!isValidPassword) {
+        return BaseController.error(res, "Invalid credentials", 401);
+      }
+
+      // --- DASHBOARD ACCESS LOGIC ---
+      let targetDashboard = role;
+
+      // If user didn't select a role (simple login), default to their highest role or 'user'
+      if (!targetDashboard) {
+        if (user.roles.includes('organization')) targetDashboard = 'organization';
+        else if (user.roles.includes('volunteer')) targetDashboard = 'volunteer';
+        else targetDashboard = 'civilian';
+      }
+
+      // Map Frontend "civilian" request to Backend "user" role
+      const dbRoleToCheck = targetDashboard === 'civilian' ? 'user' : targetDashboard;
+
+      // Check permissions
+      if (!user.roles || !user.roles.includes(dbRoleToCheck)) {
+        return BaseController.error(res, `You do not have permission to access the ${targetDashboard} portal.`, 403);
+      }
+
+      // Generate token with the SPECIFIC role they logged in as
+      const token = createJwt({
+        ...user,
+        currentRole: dbRoleToCheck // This tells frontend which UI to show
+      });
+
+      // Don't send password hash in response
+      delete user.passwordHash;
+
+      return BaseController.success(res, { 
+        token, 
+        user: {
+          ...user,
+          currentRole: dbRoleToCheck,
+          // Helper for frontend to know what OTHER options to show in dropdown
+          availableRoles: user.roles.map(r => r === 'user' ? 'civilian' : r)
+        }
+      }, `Logged into ${targetDashboard} dashboard`);
+
+    } catch (err) {
+      console.error("Login error:", err);
+      return BaseController.error(res, "Internal server error", 500, err.message);
     }
-
-    // Generate token with the selected role
-    const token = createJwt({
-      ...user,
-      currentRole: role || user.roles[0] // Store the selected role in the token
-    });
-
-    // Don't send password hash in response
-    delete user.passwordHash;
-
-    return BaseController.success(res, { 
-      token, 
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        roles: user.roles || [],
-        currentRole: role || user.roles[0],
-        isVolunteer: user.isVolunteer || false
-      }
-    }, "Login successful");
-
-  } catch (err) {
-    console.error("Login error:", err);
-    return BaseController.error(res, "Internal server error", 500, err.message);
-  }
-},
+  },
 
   async googleLogin(req, res) {
     try {
@@ -184,7 +198,7 @@ export const authController = {
       let isNewUser = false;
 
       if (!user) {
-        // Create new user
+        // Create new user (Default to Civilian/User)
         const userDoc = usersCol.doc();
         user = new User({
           uid: userDoc.id,
@@ -263,27 +277,32 @@ export const authController = {
         return BaseController.error(res, "User not found", 404);
       }
 
-      // Update roles if provided
-      if (roles) {
-        // Ensure user can't remove their own admin role
+      // --- UPGRADE LOGIC ---
+      
+      // If simply updating the volunteer flag
+      if (isVolunteer !== undefined) {
+        user.isVolunteer = Boolean(isVolunteer);
+        
+        if (isVolunteer) {
+          // If becoming a volunteer, ADD role if missing
+          if (!user.roles.includes('volunteer')) {
+            user.roles.push('volunteer');
+          }
+        } else {
+          // If resigning, REMOVE role
+          user.roles = user.roles.filter(r => r !== 'volunteer');
+        }
+      }
+
+      // If manually sending a roles array (Admin override)
+      if (roles && Array.isArray(roles)) {
+        // Validation to prevent user from removing their own admin status if they are admin
         if (requestingUser.uid === userId && 
             requestingUser.roles?.includes('admin') && 
             !roles.includes('admin')) {
           return BaseController.error(res, "Cannot remove your own admin role", 400);
         }
-        
-        // Update roles
-        user.roles = Array.isArray(roles) ? roles : [roles];
-      }
-
-      // Update volunteer status if provided
-      if (isVolunteer !== undefined) {
-        user.isVolunteer = Boolean(isVolunteer);
-        if (isVolunteer && !user.roles.includes('volunteer')) {
-          user.roles.push('volunteer');
-        } else if (!isVolunteer) {
-          user.roles = user.roles.filter(r => r !== 'volunteer');
-        }
+        user.roles = roles;
       }
 
       // Save changes
