@@ -15,11 +15,13 @@ import "./src/firebaseAdmin.js";
 
 dotenv.config();
 const app = express();
+// --- CORS CONFIGURATION ---
 app.use(cors({
   origin: [
-    "http://localhost:5173",                 // For local development
-    "http://localhost:3000",                 // Alternative local port
-    "https://disasterconnect.vercel.app"     // <--- YOUR NEW DEPLOYED FRONTEND URL
+    "http://localhost:5173",                 // Local Development
+    "http://localhost:3000",                 // Alternative Local Port
+    "https://disasterconnect.vercel.app",    // Main Deployment
+    "https://disaster-conenct.vercel.app"    // Secondary/Preview Deployment
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
