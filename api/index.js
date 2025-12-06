@@ -19,11 +19,11 @@ const app = express();
 // --- CORS CONFIGURATION (FIXED) ---
 app.use(cors({
   origin: [
-    "http://localhost:5173",             // Your local frontend
-    "http://localhost:3000",             // Alternative local port
-    "https://disaster-conenct.vercel.app" // UNCOMMENT & ADD your Vercel Frontend URL here when deployed
+    "http://localhost:5173",                 // For local development
+    "http://localhost:3000",                 // Alternative local port
+    "https://disasterconnect.vercel.app"     // <--- YOUR NEW DEPLOYED FRONTEND URL
   ],
-  credentials: true, // This allows the Authorization header to work correctly
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));

@@ -17,13 +17,13 @@ dotenv.config();
 const app = express();
 app.use(cors({
   origin: [
-    "http://localhost:5173",             // Your local frontend
-    "https://disaster-conenct.vercel.app",
-     "https://disasterconnect.vercel.app"  // Add your deployed frontend URL here later
+    "http://localhost:5173",                 // For local development
+    "http://localhost:3000",                 // Alternative local port
+    "https://disasterconnect.vercel.app"     // <--- YOUR NEW DEPLOYED FRONTEND URL
   ],
-  credentials: true, // Allow cookies/headers to be sent
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 
