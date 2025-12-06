@@ -4,7 +4,7 @@ import { BaseController } from "./BaseController.js";
 
 export const organizationController = {
   
-  // --- EVACUATION CENTERS ---
+  // ================= EVACUATION CENTERS =================
   async createCenter(req, res) {
     try {
       const orgId = req.user.uid; 
@@ -21,16 +21,38 @@ export const organizationController = {
     } catch (error) { return BaseController.error(res, error.message); }
   },
 
-  // --- ANNOUNCEMENTS ---
+  // !!! ENSURE THIS EXISTS !!!
+  async updateCenter(req, res) {
+    try {
+      const orgId = req.user.uid;
+      const { id } = req.params;
+      await firestore.collection('organizations').doc(orgId).collection('centers').doc(id).update({
+        ...req.body,
+        updatedAt: new Date()
+      });
+      return BaseController.success(res, { id }, "Evacuation Center updated");
+    } catch (error) { return BaseController.error(res, error.message); }
+  },
+
+  // !!! ENSURE THIS EXISTS !!!
+  async deleteCenter(req, res) {
+    try {
+      const orgId = req.user.uid;
+      const { id } = req.params;
+      await firestore.collection('organizations').doc(orgId).collection('centers').doc(id).delete();
+      return BaseController.success(res, { id }, "Evacuation Center deleted");
+    } catch (error) { return BaseController.error(res, error.message); }
+  },
+
+  // ================= ANNOUNCEMENTS =================
   async createAnnouncement(req, res) {
     try {
       const orgId = req.user.uid;
-      
       const announcementData = {
         title: req.body.title,
         body: req.body.body,
         status: req.body.status || 'Published',
-        createdBy: req.user.uid // Fixes "undefined" error
+        createdBy: req.user.uid
       };
 
       if (!announcementData.title || !announcementData.body) {
@@ -50,7 +72,28 @@ export const organizationController = {
     } catch (error) { return BaseController.error(res, error.message); }
   },
 
-  // --- RESOURCES ---
+  async updateAnnouncement(req, res) {
+    try {
+      const orgId = req.user.uid;
+      const { id } = req.params;
+      await firestore.collection('organizations').doc(orgId).collection('announcements').doc(id).update({
+        ...req.body,
+        updatedAt: new Date()
+      });
+      return BaseController.success(res, { id }, "Announcement updated");
+    } catch (error) { return BaseController.error(res, error.message); }
+  },
+
+  async deleteAnnouncement(req, res) {
+    try {
+      const orgId = req.user.uid;
+      const { id } = req.params;
+      await firestore.collection('organizations').doc(orgId).collection('announcements').doc(id).delete();
+      return BaseController.success(res, { id }, "Announcement deleted");
+    } catch (error) { return BaseController.error(res, error.message); }
+  },
+
+  // ================= RESOURCES =================
   async addResource(req, res) {
     try {
       const orgId = req.user.uid;
@@ -68,7 +111,29 @@ export const organizationController = {
     } catch (error) { return BaseController.error(res, error.message); }
   },
 
-  // --- REPORTS ---
+  async updateResource(req, res) {
+    try {
+      const orgId = req.user.uid;
+      const { id } = req.params;
+      // Using Resource Model static update if available, or direct firestore here:
+      await firestore.collection('organizations').doc(orgId).collection('resources').doc(id).update({
+        ...req.body,
+        updatedAt: new Date()
+      });
+      return BaseController.success(res, { id }, "Resource updated");
+    } catch (error) { return BaseController.error(res, error.message); }
+  },
+
+  async deleteResource(req, res) {
+    try {
+      const orgId = req.user.uid;
+      const { id } = req.params;
+      await firestore.collection('organizations').doc(orgId).collection('resources').doc(id).delete();
+      return BaseController.success(res, { id }, "Resource deleted");
+    } catch (error) { return BaseController.error(res, error.message); }
+  },
+
+  // ================= REPORTS =================
   async createReport(req, res) {
     try {
       const orgId = req.user.uid;
@@ -89,8 +154,26 @@ export const organizationController = {
       return BaseController.success(res, data);
     } catch (error) { return BaseController.error(res, error.message); }
   },
+
+  async updateReport(req, res) {
+    try {
+      const orgId = req.user.uid;
+      const { id } = req.params;
+      await firestore.collection('organizations').doc(orgId).collection('reports').doc(id).update(req.body);
+      return BaseController.success(res, { id }, "Report updated");
+    } catch (error) { return BaseController.error(res, error.message); }
+  },
+
+  async deleteReport(req, res) {
+    try {
+      const orgId = req.user.uid;
+      const { id } = req.params;
+      await firestore.collection('organizations').doc(orgId).collection('reports').doc(id).delete();
+      return BaseController.success(res, { id }, "Report deleted");
+    } catch (error) { return BaseController.error(res, error.message); }
+  },
   
-  // --- VOLUNTEERS LIST ---
+  // ================= VOLUNTEERS & TASKS =================
   async getOrgVolunteers(req, res) {
     try {
       const orgId = req.user.uid;
@@ -100,7 +183,6 @@ export const organizationController = {
     } catch (error) { return BaseController.error(res, error.message); }
   },
 
-  // --- ASSIGN TASK (Direct Assignment) ---
   async assignTask(req, res) {
     try {
       const orgId = req.user.uid;
@@ -108,7 +190,6 @@ export const organizationController = {
 
       if (!volunteerId || !title) return BaseController.error(res, "Volunteer ID and Title are required", 400);
 
-      // Get Org Name
       const orgDoc = await firestore.collection('organizations').doc(orgId).get();
       const orgName = orgDoc.exists ? orgDoc.data().name : "Unknown Org";
 
@@ -126,14 +207,20 @@ export const organizationController = {
         createdAt: new Date()
       };
 
-      // Write to Volunteer's Sub-collection
       const docRef = await firestore.collection('volunteers').doc(volunteerId).collection('assignments').add(assignmentData);
 
       return BaseController.success(res, { id: docRef.id, ...assignmentData }, "Task assigned successfully", 201);
     } catch (error) { return BaseController.error(res, error.message); }
   },
 
-  // --- POST A NEED (For Self-Assignment) ---
+  async deleteAssignment(req, res) {
+    try {
+      const { volunteerId, assignmentId } = req.params;
+      await firestore.collection('volunteers').doc(volunteerId).collection('assignments').doc(assignmentId).delete();
+      return BaseController.success(res, { id: assignmentId }, "Assignment deleted");
+    } catch (error) { return BaseController.error(res, error.message); }
+  },
+
   async postNeed(req, res) {
     try {
       const orgId = req.user.uid;
