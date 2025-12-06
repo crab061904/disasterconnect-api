@@ -15,7 +15,15 @@ import "./src/firebaseAdmin.js";
 
 dotenv.config();
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: [
+    "http://localhost:5173",             // Your local frontend
+    "https://disaster-conenct.vercel.app" // Add your deployed frontend URL here later
+  ],
+  credentials: true, // Allow cookies/headers to be sent
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 app.use(express.json());
 
 app.get("/", (req, res) => {
