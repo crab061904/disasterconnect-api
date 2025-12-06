@@ -16,5 +16,17 @@ class Report {
     const snap = await firestore.collection('organizations').doc(orgId).collection('reports').orderBy('date', 'desc').get();
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
+
+  // --- NEW METHODS ---
+  static async update(orgId, reportId, data) {
+    await firestore.collection('organizations').doc(orgId)
+      .collection('reports').doc(reportId)
+      .update(data);
+  }
+
+  static async delete(orgId, reportId) {
+    await firestore.collection('organizations').doc(orgId)
+      .collection('reports').doc(reportId).delete();
+  }
 }
 export default Report;

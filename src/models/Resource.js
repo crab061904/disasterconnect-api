@@ -29,5 +29,17 @@ class Resource {
     const snap = await firestore.collection('organizations').doc(orgId).collection('resources').get();
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
+
+  // --- NEW METHODS ---
+  static async update(orgId, resourceId, data) {
+    await firestore.collection('organizations').doc(orgId)
+      .collection('resources').doc(resourceId)
+      .update({ ...data, updatedAt: new Date() });
+  }
+
+  static async delete(orgId, resourceId) {
+    await firestore.collection('organizations').doc(orgId)
+      .collection('resources').doc(resourceId).delete();
+  }
 }
 export default Resource;
