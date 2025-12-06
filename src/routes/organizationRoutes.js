@@ -1,14 +1,14 @@
 import express from 'express';
-import { organizationController } from '../controllers/organizationController.js';
+import { organizationController } from '../controllers/index.js'; // Ensure index.js exports organizationController
 import { authenticate, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Apply middleware to all routes in this file
+// Middleware: All routes require login AND 'organization' role
 router.use(authenticate);
-router.use(authorize(['organization'])); // Only Orgs can access
+router.use(authorize(['organization']));
 
-// Evacuation Centers
+// Centers
 router.post('/centers', organizationController.createCenter);
 router.get('/centers', organizationController.getCenters);
 
@@ -24,7 +24,9 @@ router.get('/resources', organizationController.getResources);
 router.post('/reports', organizationController.createReport);
 router.get('/reports', organizationController.getReports);
 
-// Org-specific Volunteers list
-router.get('/volunteers', organizationController.getOrgVolunteers);
+// Volunteers & Tasks
+router.get('/volunteers', organizationController.getOrgVolunteers); // View volunteers associated with org
+router.post('/assignments', organizationController.assignTask);     // Direct assignment
+router.post('/needs', organizationController.postNeed);             // Post "Help Wanted"
 
 export default router;

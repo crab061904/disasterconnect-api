@@ -1,18 +1,29 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+
+// Import Routes
 import authRoutes from "../src/routes/auth.js";
 import disasterRoutes from "../src/routes/disasterRoutes.js";
 import helpRequestRoutes from "../src/routes/helpRequestRoutes.js";
+// !!! ADD THESE TWO MISSING ROUTES !!!
+import organizationRoutes from "../src/routes/organizationRoutes.js";
+import volunteerRoutes from "../src/routes/volunteerRoutes.js";
+
 import "../src/firebaseAdmin.js";
 
 dotenv.config();
 
 const app = express();
 
-// CORS configuration
+// --- CORS CONFIGURATION (FIXED) ---
 app.use(cors({
-  origin: '*',
+  origin: [
+    "http://localhost:5173",             // Your local frontend
+    "http://localhost:3000",             // Alternative local port
+    "https://disaster-conenct.vercel.app" // UNCOMMENT & ADD your Vercel Frontend URL here when deployed
+  ],
+  credentials: true, // This allows the Authorization header to work correctly
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
@@ -27,15 +38,21 @@ app.get("/", (req, res) => {
     endpoints: {
       auth: "/api/auth",
       disasters: "/api/disasters",
-      helpRequests: "/api/help-requests"
+      helpRequests: "/api/help-requests",
+      organization: "/api/organization", // Added to documentation
+      volunteer: "/api/volunteer"        // Added to documentation
     }
   });
 });
 
-// API Routes
+// --- REGISTER API ROUTES ---
 app.use("/api/auth", authRoutes);
 app.use("/api/disasters", disasterRoutes);
 app.use("/api/help-requests", helpRequestRoutes);
+
+// !!! REGISTER THE NEW ROUTES !!!
+app.use("/api/organization", organizationRoutes);
+app.use("/api/volunteer", volunteerRoutes);
 
 // 404 handler
 app.use((req, res) => {

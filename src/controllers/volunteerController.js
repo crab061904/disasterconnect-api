@@ -9,109 +9,125 @@ export const volunteerController = {
       const userId = req.user.uid;
       const { date, status, startTime, endTime } = req.body;
       
-      // 1. Construct the data object first
       const availabilityData = {
         date: date ? new Date(date) : new Date(),
-        status: status || "Available", // Default to "Available"
+        status: status || "Available",
         startTime: startTime || "",
         endTime: endTime || "",
         createdAt: new Date()
       };
 
-      // 2. Save to Firestore and capture the reference
-      const docRef = await firestore
-        .collection('volunteers')
-        .doc(userId)
-        .collection('availability')
-        .add(availabilityData);
+      const docRef = await firestore.collection('volunteers').doc(userId).collection('availability').add(availabilityData);
       
-      // 3. Return the ID and the Data (Fixes the "data: null" issue)
-      return BaseController.success(res, { 
-        id: docRef.id, 
-        ...availabilityData 
-      }, "Availability updated");
-
-    } catch (error) { 
-      return BaseController.error(res, error.message); 
-    }
+      return BaseController.success(res, { id: docRef.id, ...availabilityData }, "Availability updated");
+    } catch (error) { return BaseController.error(res, error.message); }
   },
 
   async getMyAvailability(req, res) {
     try {
       const userId = req.user.uid;
-      
-      // Added orderBy to show newest dates first
-      const snap = await firestore
-        .collection('volunteers')
-        .doc(userId)
-        .collection('availability')
-        .orderBy('date', 'desc') 
-        .get();
-
+      const snap = await firestore.collection('volunteers').doc(userId).collection('availability').orderBy('date', 'desc').get();
       const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       return BaseController.success(res, data);
-    } catch (error) { 
-      return BaseController.error(res, error.message); 
-    }
+    } catch (error) { return BaseController.error(res, error.message); }
   },
 
-  // --- ASSIGNMENTS ---
+  // --- ASSIGNMENTS (My Tasks) ---
   async getAssignments(req, res) {
     try {
       const userId = req.user.uid;
-      const snap = await firestore
-        .collection('volunteers')
-        .doc(userId)
-        .collection('assignments')
+      // Get tasks assigned specifically to me
+      const snap = await firestore.collection('volunteers').doc(userId).collection('assignments')
         .where('status', 'in', ['Pending', 'In Progress'])
         .get();
 
       const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       return BaseController.success(res, data);
-    } catch (error) { 
-      return BaseController.error(res, error.message); 
-    }
+    } catch (error) { return BaseController.error(res, error.message); }
   },
 
   async updateAssignmentStatus(req, res) {
     try {
       const userId = req.user.uid;
       const { assignmentId } = req.params;
-      const { status } = req.body; // "Completed", "In Progress"
+      const { status } = req.body; 
 
-      if (!status) {
-        return BaseController.error(res, "Status is required", 400);
-      }
+      if (!status) return BaseController.error(res, "Status is required", 400);
 
-      await firestore
-        .collection('volunteers')
-        .doc(userId)
-        .collection('assignments')
-        .doc(assignmentId)
+      await firestore.collection('volunteers').doc(userId).collection('assignments').doc(assignmentId)
         .update({ status, updatedAt: new Date() });
 
-      // Return the updated status so frontend knows it succeeded
       return BaseController.success(res, { assignmentId, status }, "Assignment updated");
-    } catch (error) { 
-      return BaseController.error(res, error.message); 
-    }
+    } catch (error) { return BaseController.error(res, error.message); }
+  },
+
+  // --- OPEN NEEDS (Global Feed) ---
+  async getOpenNeeds(req, res) {
+    try {
+      // Collection Group Query: Finds 'needs' across ALL organizations
+      const needsSnapshot = await firestore.collectionGroup('needs')
+        .where('status', '==', 'Open')
+        .get();
+
+      const needs = needsSnapshot.docs.map(doc => {
+        // We get the orgId from the parent document path
+        return { id: doc.id, ...doc.data(), orgId: doc.ref.parent.parent.id };
+      });
+
+      return BaseController.success(res, needs);
+    } catch (error) { return BaseController.error(res, error.message); }
+  },
+
+  // --- SELF ASSIGN (Claim a Need) ---
+  async selfAssign(req, res) {
+    try {
+      const userId = req.user.uid;
+      const { orgId, needId } = req.body;
+
+      if (!orgId || !needId) return BaseController.error(res, "Organization ID and Need ID required", 400);
+
+      const needRef = firestore.collection('organizations').doc(orgId).collection('needs').doc(needId);
+
+      // Transaction to prevent over-subscribing
+      await firestore.runTransaction(async (t) => {
+        const needDoc = await t.get(needRef);
+        if (!needDoc.exists) throw new Error("Need not found");
+
+        const needData = needDoc.data();
+        if (needData.status !== 'Open') throw new Error("Task no longer open");
+        if (needData.volunteersAssigned >= needData.volunteersNeeded) throw new Error("Task is full");
+
+        // Increment count
+        const newCount = (needData.volunteersAssigned || 0) + 1;
+        t.update(needRef, { 
+          volunteersAssigned: newCount,
+          status: newCount >= needData.volunteersNeeded ? 'Filled' : 'Open'
+        });
+
+        // Add to Volunteer's assignments
+        const assignmentRef = firestore.collection('volunteers').doc(userId).collection('assignments').doc();
+        t.set(assignmentRef, {
+          title: needData.title,
+          description: needData.description || "Self-assigned task",
+          organizationId: orgId,
+          sourceNeedId: needId,
+          status: "In Progress",
+          assignedDate: new Date(),
+          isSelfAssigned: true
+        });
+      });
+
+      return BaseController.success(res, { needId, status: "Assigned" }, "You have volunteered for this task!");
+    } catch (error) { return BaseController.error(res, error.message); }
   },
 
   // --- MISSIONS (History) ---
   async getMissionHistory(req, res) {
     try {
       const userId = req.user.uid;
-      const snap = await firestore
-        .collection('volunteers')
-        .doc(userId)
-        .collection('missions')
-        .orderBy('endDate', 'desc') // Show most recent missions first
-        .get();
-
+      const snap = await firestore.collection('volunteers').doc(userId).collection('missions').orderBy('endDate', 'desc').get();
       const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       return BaseController.success(res, data);
-    } catch (error) { 
-      return BaseController.error(res, error.message); 
-    }
+    } catch (error) { return BaseController.error(res, error.message); }
   }
 };
