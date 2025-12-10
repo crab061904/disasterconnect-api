@@ -1,4 +1,3 @@
-// File: API-BACK/disasterconnect-api/src/controllers/authController.js
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { firestore, auth as adminAuth } from "../firebaseAdmin.js";
@@ -114,11 +113,11 @@ export const authController = {
 
   async login(req, res) {
     try {
-      // role here is the TARGET dashboard user wants to enter ('civilian', 'volunteer', 'organization')
+      // Role is now REQUIRED. This tells us which portal they are trying to access.
       const { email, password, role } = req.body;
       
-      // Validation
-      const validationError = BaseController.validateRequired(req.body, ['email', 'password']);
+      // 1. Validation: Ensure 'role' is sent by the frontend
+      const validationError = BaseController.validateRequired(req.body, ['email', 'password', 'role']);
       if (validationError) {
         return BaseController.error(res, validationError, 400);
       }
@@ -138,28 +137,21 @@ export const authController = {
         return BaseController.error(res, "Invalid credentials", 401);
       }
 
-      // --- DASHBOARD ACCESS LOGIC ---
-      let targetDashboard = role;
-
-      // If user didn't select a role (simple login), default to their highest role or 'user'
-      if (!targetDashboard) {
-        if (user.roles.includes('organization')) targetDashboard = 'organization';
-        else if (user.roles.includes('volunteer')) targetDashboard = 'volunteer';
-        else targetDashboard = 'civilian';
-      }
-
+      // --- STRICT PORTAL SECURITY CHECK ---
+      
       // Map Frontend "civilian" request to Backend "user" role
-      const dbRoleToCheck = targetDashboard === 'civilian' ? 'user' : targetDashboard;
+      const dbRoleToCheck = role === 'civilian' ? 'user' : role;
 
-      // Check permissions
+      // Check permissions: Does this user actually HAVE the role required for this portal?
       if (!user.roles || !user.roles.includes(dbRoleToCheck)) {
-        return BaseController.error(res, `You do not have permission to access the ${targetDashboard} portal.`, 403);
+        // !!! SECURITY BLOCK: Prevents Civilians from logging into Org Portal !!!
+        return BaseController.error(res, `Access Denied: You are not registered as a ${role}.`, 403);
       }
 
       // Generate token with the SPECIFIC role they logged in as
       const token = createJwt({
         ...user,
-        currentRole: dbRoleToCheck // This tells frontend which UI to show
+        currentRole: dbRoleToCheck // This locks the session to this role
       });
 
       // Don't send password hash in response
@@ -173,7 +165,7 @@ export const authController = {
           // Helper for frontend to know what OTHER options to show in dropdown
           availableRoles: user.roles.map(r => r === 'user' ? 'civilian' : r)
         }
-      }, `Logged into ${targetDashboard} dashboard`);
+      }, `Logged into ${role} dashboard`);
 
     } catch (err) {
       console.error("Login error:", err);
@@ -296,7 +288,7 @@ export const authController = {
 
       // If manually sending a roles array (Admin override)
       if (roles && Array.isArray(roles)) {
-        // Validation to prevent user from removing their own admin status if they are admin
+        // Validation to prevent user from removing their own admin role
         if (requestingUser.uid === userId && 
             requestingUser.roles?.includes('admin') && 
             !roles.includes('admin')) {
