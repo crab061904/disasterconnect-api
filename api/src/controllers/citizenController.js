@@ -1,30 +1,36 @@
-// src/controllers/citizenController.js
 import { HelpRequest, EvacuationCenter } from "../models/index.js";
 import { BaseController } from "./BaseController.js";
+import { db } from "../config/firebase.js"; // Ensure you import db
 
 export const citizenController = {
   // POST /api/citizen/requests
-  async createRequest(req, res) {
+  // FIX 1: Changed syntax from "createRequest =" to "createRequest:"
+  createRequest: async (req, res) => {
     try {
-      const { type, location, details } = req.body;
-      const userId = req.user.uid;
+      // FIX 2: Extract 'details' as 'description' to handle frontend mismatch
+      const { disasterId, type, description, details, location } = req.body;
 
-      const request = new HelpRequest({
-        requestedBy: userId,
-        type: type || "other",
-        location: { address: location, lat: null, lng: null },
-        description: details || "Emergency assistance requested",
-        status: "pending",
-        urgency: "high",
-        contactInfo: {},
-        images: [],
-        createdAt: new Date()
-      });
+      const helpRequestData = {
+        // FIX 3: Safety check - Convert undefined to null to prevent crash
+        disasterId: disasterId || null,
+        
+        type,
+        // Accept either 'description' or 'details' from frontend
+        description: description || details || "No description provided",
+        location,
+        status: 'pending',
+        createdAt: new Date(),
+        requestedBy: req.user.uid
+      };
 
-      await request.save();
-      return BaseController.success(res, request, "Help request submitted", 201);
+      // Save to Firestore
+      const docRef = await db.collection('help_requests').add(helpRequestData);
+
+      res.status(201).json({ success: true, id: docRef.id });
+
     } catch (error) {
-      return BaseController.error(res, error.message);
+      console.error("Error creating request:", error);
+      res.status(500).json({ success: false, error: error.message });
     }
   },
 
