@@ -6,7 +6,7 @@ const router = express.Router();
 
 // All routes require login and 'user' (civilian) role
 router.use(authenticate);
-router.use(authorize(['user'])); // In your DB, civilians have the role 'user'
+router.use(authorize(['civilian'])); // In your DB, civilians have the role 'user'
 
 // Routes matching your frontend services
 router.post('/requests', citizenController.createRequest);
