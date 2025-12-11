@@ -6,10 +6,10 @@ import dotenv from "dotenv";
 import authRoutes from "./src/routes/auth.js";
 import disasterRoutes from "./src/routes/disasterRoutes.js";
 import helpRequestRoutes from "./src/routes/helpRequestRoutes.js";
-import citizenRoutes from "./src/routes/citizenRoutes.js";
-// NEW: Organization and Volunteer Routes
+
 import organizationRoutes from "./src/routes/organizationRoutes.js";
 import volunteerRoutes from "./src/routes/volunteerRoutes.js";
+import citizenRoutes from "./src/routes/citizenRoutes.js";
 
 import "./src/firebaseAdmin.js";
 
