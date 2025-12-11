@@ -2,20 +2,19 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 
-// Import Routes
-import authRoutes from "../src/routes/auth.js";
-import disasterRoutes from "../src/routes/disasterRoutes.js";
-import helpRequestRoutes from "../src/routes/helpRequestRoutes.js";
-// !!! ADD THESE TWO MISSING ROUTES !!!
-import organizationRoutes from "../src/routes/organizationRoutes.js";
-import volunteerRoutes from "../src/routes/volunteerRoutes.js";
+// Existing Routes
+import authRoutes from "./src/routes/auth.js";
+import disasterRoutes from "./src/routes/disasterRoutes.js";
+import helpRequestRoutes from "./src/routes/helpRequestRoutes.js";
 
-import "../src/firebaseAdmin.js";
+import organizationRoutes from "./src/routes/organizationRoutes.js";
+import volunteerRoutes from "./src/routes/volunteerRoutes.js";
+import citizenRoutes from "./src/routes/citizenRoutes.js";
+
+import "./src/firebaseAdmin.js";
 
 dotenv.config();
-
 const app = express();
-
 // --- CORS CONFIGURATION ---
 app.use(cors({
   origin: [
@@ -28,51 +27,68 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-
 app.use(express.json());
 
-// Root endpoint
 app.get("/", (req, res) => {
-  res.json({ 
-    message: "DisasterConnect API is running!",
-    version: "1.0.0",
-    endpoints: {
-      auth: "/api/auth",
-      disasters: "/api/disasters",
-      helpRequests: "/api/help-requests",
-      organization: "/api/organization", // Added to documentation
-      volunteer: "/api/volunteer"        // Added to documentation
-    }
-  });
+  res.json({ message: "Backend is running!" });
 });
 
-// --- REGISTER API ROUTES ---
+// ================= API Routes =================
 app.use("/api/auth", authRoutes);
 app.use("/api/disasters", disasterRoutes);
 app.use("/api/help-requests", helpRequestRoutes);
+app.use("/api/citizen", citizenRoutes);
 
-// !!! REGISTER THE NEW ROUTES !!!
-app.use("/api/organization", organizationRoutes);
-app.use("/api/volunteer", volunteerRoutes);
+// Register the new routes
+app.use("/api/organization", organizationRoutes); // Handles centers, announcements, resources, reports
+app.use("/api/volunteer", volunteerRoutes);       // Handles availability, assignments, missions
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ 
-    success: false,
-    error: "Endpoint not found",
-    path: req.path 
+const PORT = process.env.PORT || 5000;
+
+// Add error handling and keep-alive
+const server = app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📡 API endpoints available at http://localhost:${PORT}`);
+  
+  console.log(`\n--- Active Endpoints ---`);
+  console.log(`🔐 Auth:          /api/auth`);
+  console.log(`🌪️  Disasters:     /api/disasters`);
+  console.log(`🆘 Help Requests: /api/help-requests`);
+  console.log(`🏢 Organization:  /api/organization (Centers, Announcements, Resources)`);
+  console.log(`🙋 Volunteer:     /api/volunteer (Availability, Assignments)`);
+  
+  console.log(`\nPress Ctrl+C to stop the server`);
+});
+
+// Handle server errors
+server.on('error', (error) => {
+  console.error('❌ Server error:', error);
+});
+
+// Handle process termination
+process.on('SIGINT', () => {
+  console.log('\n🛑 Shutting down server gracefully...');
+  server.close(() => {
+    console.log('✅ Server stopped');
+    process.exit(0);
   });
 });
 
-// Error handler
-app.use((err, req, res, next) => {
-  console.error('Server error:', err);
-  res.status(500).json({ 
-    success: false,
-    error: "Internal server error",
-    message: err.message 
+process.on('SIGTERM', () => {
+  console.log('\n🛑 Shutting down server gracefully...');
+  server.close(() => {
+    console.log('✅ Server stopped');
+    process.exit(0);
   });
 });
 
-// Export for Vercel serverless
-export default app;
+// Keep the process alive
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
