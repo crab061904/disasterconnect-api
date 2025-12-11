@@ -1,6 +1,6 @@
 import { HelpRequest, EvacuationCenter } from "../models/index.js";
 import { BaseController } from "./BaseController.js";
-import { db } from "../config/firebase.js"; 
+import { db } from "../firebaseAdmin.js";
 
 export const citizenController = {
   
