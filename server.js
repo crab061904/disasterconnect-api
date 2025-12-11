@@ -3,15 +3,15 @@ import cors from "cors";
 import dotenv from "dotenv";
 
 // Existing Routes
-import authRoutes from "./src/routes/auth.js";
-import disasterRoutes from "./src/routes/disasterRoutes.js";
-import helpRequestRoutes from "./src/routes/helpRequestRoutes.js";
+import authRoutes from "./api/src/routes/auth.js";
+import disasterRoutes from "./api/src/routes/disasterRoutes.js";
+import helpRequestRoutes from "./api/src/routes/helpRequestRoutes.js";
 
-import organizationRoutes from "./src/routes/organizationRoutes.js";
-import volunteerRoutes from "./src/routes/volunteerRoutes.js";
-import citizenRoutes from "./src/routes/citizenRoutes.js";
+import organizationRoutes from "./api/src/routes/organizationRoutes.js";
+import volunteerRoutes from "./api/src/routes/volunteerRoutes.js";
+import citizenRoutes from "./api/src/routes/citizenRoutes.js";
 
-import "./src/firebaseAdmin.js";
+import "./api/src/firebaseAdmin.js";
 
 dotenv.config();
 const app = express();
