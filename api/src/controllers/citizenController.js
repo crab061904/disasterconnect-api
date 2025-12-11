@@ -1,40 +1,36 @@
 import { HelpRequest, EvacuationCenter } from "../models/index.js";
 import { BaseController } from "./BaseController.js";
-import { db } from "../config/firebase.js"; // Ensure you import db
+import { db } from "../config/firebase.js"; 
 
 export const citizenController = {
-  // POST /api/citizen/requests
-  // FIX 1: Changed syntax from "createRequest =" to "createRequest:"
+  
+  // FIX: Use ':' not '='
   createRequest: async (req, res) => {
     try {
-      // FIX 2: Extract 'details' as 'description' to handle frontend mismatch
+      console.log("Create Request Body:", req.body); // Keep this for debugging
+
       const { disasterId, type, description, details, location } = req.body;
 
       const helpRequestData = {
-        // FIX 3: Safety check - Convert undefined to null to prevent crash
-        disasterId: disasterId || null,
-        
+        disasterId: disasterId || null, 
         type,
-        // Accept either 'description' or 'details' from frontend
         description: description || details || "No description provided",
         location,
         status: 'pending',
         createdAt: new Date(),
-        requestedBy: req.user.uid
+        requestedBy: req.user.uid 
       };
 
-      // Save to Firestore
       const docRef = await db.collection('help_requests').add(helpRequestData);
-
       res.status(201).json({ success: true, id: docRef.id });
 
     } catch (error) {
       console.error("Error creating request:", error);
       res.status(500).json({ success: false, error: error.message });
     }
-  },
+  }, // <--- Don't forget this comma!
 
-  // GET /api/citizen/requests/active
+  // FIX: This one was already correct, but ensure it follows the comma
   async getMyActiveRequests(req, res) {
     try {
       const userId = req.user.uid;
@@ -45,7 +41,6 @@ export const citizenController = {
     }
   },
 
-  // GET /api/citizen/centers
   async getAllCenters(req, res) {
     try {
       const centers = await EvacuationCenter.getAllActive();
