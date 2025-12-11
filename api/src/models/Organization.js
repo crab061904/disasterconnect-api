@@ -1,28 +1,36 @@
-import { firestore } from "../firebaseAdmin.js";
+// ✅ FIX: Import 'db' (matches your recent firebaseAdmin.js update)
+import { db } from "../firebaseAdmin.js";
 
 /**
  * Organization Model
  * Collection: organizations
- * For NGOs, government agencies, rescue teams, etc.
  */
 class Organization {
   constructor(data) {
+    // ✅ FIX: Default ALL fields to null or empty types to prevent Firestore "undefined" crash
     this.id = data.id || null;
-    this.name = data.name;
-    this.type = data.type; // ngo, government, rescue_team, medical, etc.
+    this.name = data.name || null; // <--- This was crashing your app
+    this.type = data.type || "organization"; 
     this.description = data.description || "";
-    this.email = data.email;
-    this.phone = data.phone;
+    this.email = data.email || null;
+    this.phone = data.phone || "";
     this.website = data.website || "";
     this.logo = data.logo || "";
-    this.location = data.location; // { lat, lng, address }
-    this.serviceArea = data.serviceArea || []; // array of cities/regions
-    this.resources = data.resources || []; // available resources
-    this.adminUid = data.adminUid; // user who manages this org
-    this.members = data.members || []; // array of user uids
-    this.isVerified = data.isVerified || false;
-    this.createdAt = data.createdAt || new Date();
-    this.updatedAt = data.updatedAt || new Date();
+    
+    // Ensure nested objects are handled safely
+    this.location = data.location || { lat: null, lng: null, address: "" };
+    
+    this.serviceArea = Array.isArray(data.serviceArea) ? data.serviceArea : [];
+    this.resources = Array.isArray(data.resources) ? data.resources : [];
+    
+    this.adminUid = data.adminUid || null;
+    this.members = Array.isArray(data.members) ? data.members : [];
+    
+    this.isVerified = data.isVerified === true; // Strict boolean check
+    
+    // Handle dates safely
+    this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
+    this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
   }
 
   toFirestore() {
@@ -54,17 +62,18 @@ class Organization {
     this.updatedAt = new Date();
     const data = this.toFirestore();
 
+    // Use 'db' instead of 'firestore'
     if (this.id) {
-      await firestore.collection("organizations").doc(this.id).set(data, { merge: true });
+      await db.collection("organizations").doc(this.id).set(data, { merge: true });
     } else {
-      const docRef = await firestore.collection("organizations").add(data);
+      const docRef = await db.collection("organizations").add(data);
       this.id = docRef.id;
     }
     return this;
   }
 
   static async getById(id) {
-    const doc = await firestore.collection("organizations").doc(id).get();
+    const doc = await db.collection("organizations").doc(id).get();
     if (!doc.exists) {
       return null;
     }
@@ -72,7 +81,7 @@ class Organization {
   }
 
   static async getByType(type, limit = 20) {
-    const snapshot = await firestore
+    const snapshot = await db
       .collection("organizations")
       .where("type", "==", type)
       .where("isVerified", "==", true)
@@ -82,7 +91,6 @@ class Organization {
     return snapshot.docs.map((doc) => Organization.fromFirestore(doc));
   }
 
-  // Add member to organization
   async addMember(userUid) {
     if (!this.members.includes(userUid)) {
       this.members.push(userUid);
@@ -90,7 +98,6 @@ class Organization {
     }
   }
 
-  // Remove member from organization
   async removeMember(userUid) {
     this.members = this.members.filter((uid) => uid !== userUid);
     await this.save();
@@ -98,7 +105,7 @@ class Organization {
 
   async delete() {
     if (!this.id) throw new Error("Cannot delete organization without ID");
-    await firestore.collection("organizations").doc(this.id).delete();
+    await db.collection("organizations").doc(this.id).delete();
   }
 }
 
