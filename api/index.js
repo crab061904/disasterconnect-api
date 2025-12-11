@@ -16,17 +16,19 @@ import "./src/firebaseAdmin.js";
 dotenv.config();
 const app = express();
 // --- CORS CONFIGURATION ---
-app.use(cors({
+const corsOptions = {
   origin: [
-    "http://localhost:5173",                 // Local Development
-    "http://localhost:3000",                 // Alternative Local Port
-    "https://disasterconnect.vercel.app",    // Main Deployment
-    "https://disaster-conenct.vercel.app"    // Secondary/Preview Deployment
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://disasterconnect.vercel.app",
+    "https://disaster-conenct.vercel.app"
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 app.get("/", (req, res) => {
