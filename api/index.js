@@ -3,7 +3,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 
-// --- IMPORT ROUTES (Note the ./src path) ---
+// --- IMPORT ROUTES ---
 import authRoutes from "./src/routes/auth.js";
 import disasterRoutes from "./src/routes/disasterRoutes.js";
 import helpRequestRoutes from "./src/routes/helpRequestRoutes.js";
@@ -31,7 +31,11 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Handle preflight checks
+
+// --- FIX IS HERE: Changed '*' to '/(.*)' ---
+app.options('/(.*)', cors(corsOptions)); 
+// ------------------------------------------
+
 app.use(express.json());
 
 // --- ROOT ENDPOINT ---
@@ -68,12 +72,5 @@ if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {
     console.log(`🚀 Server running locally on port ${PORT}`);
     console.log(`📡 API endpoints available at http://localhost:${PORT}`);
-    
-    console.log(`\n--- Active Endpoints ---`);
-    console.log(`🔐 Auth:          /api/auth`);
-    console.log(`🌪️  Disasters:     /api/disasters`);
-    console.log(`👤 Citizen:       /api/citizen`);
-    console.log(`🏢 Organization:  /api/organization`);
-    console.log(`🙋 Volunteer:     /api/volunteer`);
   });
 }
