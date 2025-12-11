@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 import authRoutes from "./src/routes/auth.js";
 import disasterRoutes from "./src/routes/disasterRoutes.js";
 import helpRequestRoutes from "./src/routes/helpRequestRoutes.js";
-
+import citizenRoutes from "./src/routes/citizenRoutes.js";
 // NEW: Organization and Volunteer Routes
 import organizationRoutes from "./src/routes/organizationRoutes.js";
 import volunteerRoutes from "./src/routes/volunteerRoutes.js";
@@ -37,6 +37,7 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/disasters", disasterRoutes);
 app.use("/api/help-requests", helpRequestRoutes);
+app.use("/api/citizen", citizenRoutes);
 
 // Register the new routes
 app.use("/api/organization", organizationRoutes); // Handles centers, announcements, resources, reports

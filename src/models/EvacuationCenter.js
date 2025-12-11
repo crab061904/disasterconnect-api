@@ -142,6 +142,12 @@ class EvacuationCenter {
   getAvailableSpace() {
     return Math.max(0, this.capacity - this.occupied);
   }
+  static async getAllActive() {
+    // Queries collection group "centers" to find all centers across all orgs
+    const snapshot = await firestore.collectionGroup("centers").get();
+    return snapshot.docs.map(doc => EvacuationCenter.fromFirestore(doc));
+  }
 }
+
 
 export default EvacuationCenter;

@@ -115,6 +115,17 @@ class HelpRequest {
     if (!this.id) throw new Error("Cannot delete help request without ID");
     await firestore.collection("help_requests").doc(this.id).delete();
   }
+  // Add this inside the HelpRequest class
+  static async getByUser(userId) {
+    const snapshot = await firestore
+      .collection("help_requests")
+      .where("requestedBy", "==", userId)
+      .where("status", "in", ["pending", "in_progress", "acknowledged"])
+      .orderBy("createdAt", "desc")
+      .get();
+
+    return snapshot.docs.map((doc) => HelpRequest.fromFirestore(doc));
+  }
 }
 
 export default HelpRequest;
