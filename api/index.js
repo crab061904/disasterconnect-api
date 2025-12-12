@@ -14,7 +14,7 @@ import volunteerRoutes from "./src/routes/volunteerRoutes.js";
 // Initialize Firebase Admin
 import "./src/firebaseAdmin.js";
 // Add this with other route imports
-import adminRoutes from './api/src/routes/adminRoutes.js';
+import adminRoutes from './src/routes/adminRoutes.js';
 
 // Add this with other route middlewares
 
