@@ -1,6 +1,10 @@
 import { firestore } from "../firebaseAdmin.js";
 import { BaseController } from "./BaseController.js";
 
+// --- Database Collection Name Constant ---
+// NOTE: Use the correct subcollection name confirmed in your database
+const HELP_REQUESTS_COLLECTION_NAME = 'help_requests'; 
+
 export const volunteerController = {
   
   // --- AVAILABILITY ---
@@ -47,6 +51,8 @@ export const volunteerController = {
   },
 
   async updateAssignmentStatus(req, res) {
+    // NOTE: This function is used for general status updates, but we will use the new
+    // `completeAssignment` function below for final resolution of a Help Request.
     try {
       const userId = req.user.uid;
       const { assignmentId } = req.params;
@@ -60,35 +66,80 @@ export const volunteerController = {
       return BaseController.success(res, { assignmentId, status }, "Assignment updated");
     } catch (error) { return BaseController.error(res, error.message); }
   },
+  
+  // ⭐ NEW FUNCTION: Complete Assignment and Close Help Request (Fulfilled Loop)
+  async completeAssignment(req, res) {
+    const userId = req.user.uid;
+    const { assignmentId, helpRequestId, orgId } = req.body;
+
+    if (!assignmentId || !helpRequestId || !orgId) {
+        return BaseController.error(res, "Missing assignment, help request, or organization IDs.", 400);
+    }
+    
+    // 1. References for the transaction
+    const assignmentRef = firestore.collection('volunteers').doc(userId).collection('assignments').doc(assignmentId);
+    
+    // The original Help Request document that the civilian is tracking
+    const helpRequestRef = firestore.collection('organizations').doc(orgId).collection(HELP_REQUESTS_COLLECTION_NAME).doc(helpRequestId);
+
+    try {
+        await firestore.runTransaction(async (t) => {
+            
+            // Check if the request exists
+            const requestDoc = await t.get(helpRequestRef);
+            if (!requestDoc.exists) throw new Error("Original Help Request not found.");
+
+            // 2. Mark Volunteer Assignment as Completed
+            t.update(assignmentRef, { 
+                status: 'Completed', 
+                completionDate: new Date(),
+                completedBy: userId
+            });
+
+            // 3. Mark Original Help Request as Closed (This resolves the Civilian's need)
+            t.update(helpRequestRef, { 
+                status: 'Closed', 
+                closedByVolunteer: true, // Flag for tracking source of closure
+                closedDate: new Date() 
+            });
+            
+            // NOTE: The Civilian Dashboard logic (CitizenDashboard.tsx) now checks for 
+            // active requests. When the status changes to 'Closed', the civilian is 
+            // implicitly marked "Safe" / "No active requests."
+        });
+
+        return BaseController.success(res, { assignmentId, helpRequestId }, "Assignment successfully completed and Help Request closed.");
+
+    } catch (error) {
+        console.error("Transaction failed during assignment completion:", error);
+        return BaseController.error(res, error.message);
+    }
+  },
+
 
   // --- AVAILABLE HELP REQUESTS (Global Feed) ---
   async getAvailableHelpRequests(req, res) {
     try {
-      // NOTE: This Collection Group query requires a Composite Index in Firestore
-      // If you still see the 500 error, ensure the index is created in the Firebase console.
+      // NOTE: This Collection Group query requires a Collection Group Index on 'help_requests' with 'status' field.
       
-      const requestsSnapshot = await firestore.collectionGroup('help_requests')
+      const requestsSnapshot = await firestore.collectionGroup(HELP_REQUESTS_COLLECTION_NAME)
         .where('status', '==', 'Open')
         .get();
-// Inside volunteerController.js (getAvailableHelpRequests function)
 
-const helpRequests = requestsSnapshot.docs.map(doc => {
-    // Safely retrieve the parent ID, ensuring it doesn't fail if the path is unexpected
-    const organizationId = doc.ref.parent?.parent?.id || 'unknown_org'; 
-    
-    // Check if the required fields exist on the document data before spreading
-    const data = doc.data();
+      const helpRequests = requestsSnapshot.docs.map(doc => {
+        // Safely retrieve the parent ID (Organization ID)
+        const organizationId = doc.ref.parent?.parent?.id || 'unknown_org'; 
+        const data = doc.data();
 
-    return { 
-        id: doc.id, 
-        // Use default values for critical fields if necessary, or just return the data
-        title: data.title || 'Untitled Request', 
-        organizationId: organizationId,
-        // ... include other necessary fields safely
-        ...data 
-    };
-});
-
+        return { 
+            id: doc.id, 
+          // Safely map required fields
+            title: data.title || 'Untitled Request', 
+            organizationId: organizationId,
+            ...data 
+        };
+      });
+      
       return BaseController.success(res, helpRequests);
     } catch (error) { 
         console.error("Firestore Error (getAvailableHelpRequests):", error);
@@ -105,8 +156,8 @@ const helpRequests = requestsSnapshot.docs.map(doc => {
 
       if (!orgId || !helpRequestId) return BaseController.error(res, "Organization ID and Help Request ID required", 400);
 
-      // Reference the document using the database collection name 'needs'
-      const requestRef = firestore.collection('organizations').doc(orgId).collection('needs').doc(helpRequestId);
+      // ⭐ CRITICAL FIX: Use correct collection name (help_requests)
+      const requestRef = firestore.collection('organizations').doc(orgId).collection(HELP_REQUESTS_COLLECTION_NAME).doc(helpRequestId);
 
       // Transaction to prevent over-subscribing
       await firestore.runTransaction(async (t) => {
@@ -121,7 +172,8 @@ const helpRequests = requestsSnapshot.docs.map(doc => {
         const newCount = (requestData.volunteersAssigned || 0) + 1;
         t.update(requestRef, { 
           volunteersAssigned: newCount,
-          status: newCount >= requestData.volunteersNeeded ? 'Filled' : 'Open'
+          // Set assignment status to 'In Progress' immediately on the Help Request side
+          status: 'In Progress' 
         });
 
         // Add to Volunteer's assignments
@@ -140,7 +192,7 @@ const helpRequests = requestsSnapshot.docs.map(doc => {
       return BaseController.success(res, { helpRequestId, status: "Assigned" }, "You have volunteered for this request!");
     } catch (error) { return BaseController.error(res, error.message); }
   },
-    
+    
   // --- LINKED ORGANIZATIONS (Fixes 404 on frontend fetch) ---
   async getLinkedOrganizations(req, res) {
     try {
