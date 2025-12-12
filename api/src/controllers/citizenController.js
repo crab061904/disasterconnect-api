@@ -1,25 +1,29 @@
+// citizenController.js
 import { HelpRequest, EvacuationCenter } from "../models/index.js";
 import { BaseController } from "./BaseController.js";
 import { db } from "../firebaseAdmin.js"; 
 
 // --- Database Path Constants ---
 const ORGANIZATION_COLLECTION_NAME = 'organizations';
-const HELP_REQUESTS_SUBCOLLECTION_NAME = 'help_requests'; // The subcollection name for new data
+const HELP_REQUESTS_SUBCOLLECTION_NAME = 'help_requests'; 
 const COMMUNITY_ORG_ID = 'community_requests'; 
-const ROOT_LEVEL_COLLECTION_NAME = 'help_requests'; // The top-level collection for old data
+const ROOT_LEVEL_COLLECTION_NAME = 'help_requests';
 
 export const citizenController = {
   
-  // 1. CREATE REQUEST (Writes new requests to the SUBCOLLECTION path)
+  // 1. CREATE REQUEST (Accepts and saves coordinates)
   createRequest: async (req, res) => {
     try {
-      const { disasterId, type, description, details, location, status, volunteersAssigned, volunteersNeeded } = req.body;
+      // ⭐ FIX: Destructure coordinates from the request body
+      const { disasterId, type, description, details, location, status, volunteersAssigned, volunteersNeeded, coordinates } = req.body;
 
       const helpRequestData = {
         disasterId: disasterId || null, 
         type,
         description: description || details || "No description provided",
         location,
+        // ⭐ FIX: Save coordinates object to the database
+        coordinates: coordinates || { lat: 0, lng: 0 }, 
         status: status || 'Open', 
         volunteersAssigned: volunteersAssigned || 0,
         volunteersNeeded: volunteersNeeded || 1,
@@ -32,7 +36,6 @@ export const citizenController = {
       const communityOrgRef = db.collection(ORGANIZATION_COLLECTION_NAME).doc(COMMUNITY_ORG_ID);
       await communityOrgRef.set({ name: 'Community Requests', type: 'Community' }, { merge: true });
 
-      // Write to SUBCOLLECTION (Correct path for Volunteer Portal visibility)
       const docRef = await communityOrgRef.collection(HELP_REQUESTS_SUBCOLLECTION_NAME).add(helpRequestData);
 
       return BaseController.success(res, { id: docRef.id, ...helpRequestData }, "Help Request successfully broadcasted.");
@@ -43,7 +46,7 @@ export const citizenController = {
     }
   },
 
-  // 2. RESOLVE REQUEST (Robustly checks for Old Root Data and New Subcollection Data)
+  // 2. RESOLVE REQUEST (Remains the same as its logic is path-finding)
   async resolveRequest(req, res) {
     try {
         const requestId = req.params.requestId; 
@@ -51,32 +54,32 @@ export const citizenController = {
             return BaseController.error(res, "Request ID is missing from URL.", 400);
         }
 
-        // 1. Define the correct (new) subcollection reference
+        // 1. Define the correct (new) subcollection reference
         const subcollectionRef = db.collection(ORGANIZATION_COLLECTION_NAME)
                             .doc(COMMUNITY_ORG_ID)
                             .collection(HELP_REQUESTS_SUBCOLLECTION_NAME)
                             .doc(requestId);
 
-        // 2. Define the old (stale) root collection reference
-        const rootRef = db.collection(ROOT_LEVEL_COLLECTION_NAME).doc(requestId);
-        
-        let requestRef;
-        let docSnap = await subcollectionRef.get();
+        // 2. Define the old (stale) root collection reference
+        const rootRef = db.collection(ROOT_LEVEL_COLLECTION_NAME).doc(requestId);
+        
+        let requestRef;
+        let docSnap = await subcollectionRef.get();
 
-        // Check 1: Is it in the new (correct) subcollection?
-        if (docSnap.exists) {
-            requestRef = subcollectionRef;
-        } else {
-            // Check 2: Is it in the old (stale) root collection? (For backward compatibility)
-            docSnap = await rootRef.get();
-            if (docSnap.exists) {
-                requestRef = rootRef;
-            } else {
-                // If not found in either, throw the error with the ID.
-                throw new Error(`Help Request (ID: ${requestId}) not found in expected paths.`);
-            }
-        }
-        
+        // Check 1: Is it in the new (correct) subcollection?
+        if (docSnap.exists) {
+            requestRef = subcollectionRef;
+        } else {
+            // Check 2: Is it in the old (stale) root collection? (For backward compatibility)
+            docSnap = await rootRef.get();
+            if (docSnap.exists) {
+                requestRef = rootRef;
+            } else {
+                // If not found in either, throw the error with the ID.
+                throw new Error(`Help Request (ID: ${requestId}) not found in expected paths.`);
+            }
+        }
+        
         // Update the status of the found document
         await requestRef.update({
             status: 'Closed', // Marks the status as resolved
