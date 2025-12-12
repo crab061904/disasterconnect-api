@@ -8,14 +8,24 @@
   - [Authentication Routes](#authentication-routes)
   - [Disaster Routes](#disaster-routes)
   - [Help Request Routes](#help-request-routes)
+  - [Citizen Routes](#citizen-routes)
+  - [Organization Routes](#organization-routes)
+  - [Volunteer Routes](#volunteer-routes)
+- [Data Models](#data-models)
 - [Response Format](#response-format)
-- [Error Codes](#error-codes)
+- [Error Handling](#error-handling)
+- [Rate Limiting](#rate-limiting)
+- [Deployment](#deployment)
+- [Local Development](#local-development)
+- [Testing](#testing)
+- [Environment Variables](#environment-variables)
+- [Contributing](#contributing)
 
 ---
 
 ## Overview
 
-DisasterConnect API is a RESTful API for managing disaster reports, help requests, and user authentication during emergency situations.
+DisasterConnect API is a comprehensive RESTful API for managing disaster response operations, including user authentication, disaster tracking, help requests, resource management, and volunteer coordination during emergency situations.
 
 ## Base URL
 
@@ -26,7 +36,7 @@ http://localhost:5000
 
 **Production:**
 ```
-https://your-api-name.vercel.app
+https://disasterconnect.vercel.app
 ```
 
 ## Authentication
@@ -36,6 +46,12 @@ Most endpoints require authentication using JWT (JSON Web Token). Include the to
 ```
 Authorization: Bearer <your_jwt_token>
 ```
+
+### User Roles
+- `admin`: Full access to all resources
+- `organization`: Can manage organization resources, announcements, and reports
+- `volunteer`: Can manage volunteer availability and assignments
+- `citizen`: Can create help requests and view public information
 
 ---
 
@@ -86,8 +102,6 @@ Create a new user account.
   }
 }
 ```
-
----
 
 #### 2. Login
 Authenticate a user and receive a JWT token.
@@ -245,8 +259,27 @@ GET /api/disasters/active?limit=20
 {
   "success": true,
   "count": 15,
+  "total": 10,
+  "page": 1,
+  "limit": 10,
   "data": [
     {
+      "id": "disaster123",
+      "name": "Typhoon Ruby",
+      "type": "typhoon",
+      "status": "active",
+      "location": {
+        "latitude": 14.5995,
+        "longitude": 120.9842,
+        "address": "Metro Manila, Philippines"
+      },
+      "startDate": "2025-12-10T00:00:00.000Z",
+      "description": "Category 4 typhoon expected to make landfall",
+      "severity": "high",
+      "affectedAreas": ["Manila", "Quezon City", "Makati"],
+      "createdAt": "2025-12-09T12:00:00.000Z",
+      "updatedAt": "2025-12-09T12:00:00.000Z"
+    }
       "id": "disaster123",
       "title": "Earthquake in Metro Manila",
       "type": "earthquake",
