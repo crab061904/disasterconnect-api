@@ -10,11 +10,11 @@ import helpRequestRoutes from "./src/routes/helpRequestRoutes.js";
 import citizenRoutes from "./src/routes/citizenRoutes.js";
 import organizationRoutes from "./src/routes/organizationRoutes.js";
 import volunteerRoutes from "./src/routes/volunteerRoutes.js";
-
+import adminRoutes from './src/routes/adminRoutes.js';
 // Initialize Firebase Admin
 import "./src/firebaseAdmin.js";
 // Add this with other route imports
-import adminRoutes from './src/routes/adminRoutes.js';
+
 
 // Add this with other route middlewares
 
