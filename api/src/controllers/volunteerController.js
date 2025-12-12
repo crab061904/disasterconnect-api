@@ -70,11 +70,24 @@ export const volunteerController = {
       const requestsSnapshot = await firestore.collectionGroup('help_requests')
         .where('status', '==', 'Open')
         .get();
+// Inside volunteerController.js (getAvailableHelpRequests function)
 
-      const helpRequests = requestsSnapshot.docs.map(doc => {
-        // We get the organizationId from the parent document path
-        return { id: doc.id, ...doc.data(), organizationId: doc.ref.parent.parent.id };
-      });
+const helpRequests = requestsSnapshot.docs.map(doc => {
+    // Safely retrieve the parent ID, ensuring it doesn't fail if the path is unexpected
+    const organizationId = doc.ref.parent?.parent?.id || 'unknown_org'; 
+    
+    // Check if the required fields exist on the document data before spreading
+    const data = doc.data();
+
+    return { 
+        id: doc.id, 
+        // Use default values for critical fields if necessary, or just return the data
+        title: data.title || 'Untitled Request', 
+        organizationId: organizationId,
+        // ... include other necessary fields safely
+        ...data 
+    };
+});
 
       return BaseController.success(res, helpRequests);
     } catch (error) { 
