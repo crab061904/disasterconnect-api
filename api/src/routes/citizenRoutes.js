@@ -12,5 +12,5 @@ router.use(authorize(['civilian','citizen','user'])); // In your DB, civilians h
 router.post('/requests', citizenController.createRequest);
 router.get('/requests/active', citizenController.getMyActiveRequests);
 router.get('/centers', citizenController.getAllCenters);
-
+router.post('/requests/:requestId/resolve', citizenController.resolveRequest);
 export default router;
