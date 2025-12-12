@@ -4,15 +4,13 @@ import { db } from "../firebaseAdmin.js";
 
 // --- Database Path Constants ---
 const ORGANIZATION_COLLECTION_NAME = 'organizations';
-// This MUST be the exact subcollection name the volunteer portal's collectionGroup('help_requests') queries.
-// We keep it as 'help_requests' to match the volunteer controller's global query,
-// which is the standard setup for Collection Group.
-const HELP_REQUESTS_SUBCOLLECTION_NAME = 'help_requests'; 
-const COMMUNITY_ORG_ID = 'community_requests'; // The hardcoded virtual organization ID
+const HELP_REQUESTS_SUBCOLLECTION_NAME = 'help_requests'; // The subcollection name for new data
+const COMMUNITY_ORG_ID = 'community_requests'; 
+const ROOT_LEVEL_COLLECTION_NAME = 'help_requests'; // The top-level collection for old data
 
 export const citizenController = {
   
-  // 1. CREATE REQUEST (Ensures immediate 'Open' status and correct path)
+  // 1. CREATE REQUEST (Writes new requests to the SUBCOLLECTION path)
   createRequest: async (req, res) => {
     try {
       const { disasterId, type, description, details, location, status, volunteersAssigned, volunteersNeeded } = req.body;
@@ -22,21 +20,19 @@ export const citizenController = {
         type,
         description: description || details || "No description provided",
         location,
-        // Status is 'Open' immediately for volunteer visibility
         status: status || 'Open', 
         volunteersAssigned: volunteersAssigned || 0,
         volunteersNeeded: volunteersNeeded || 1,
         createdAt: new Date(),
         requestedBy: req.user.uid,
         organization: 'Civilian Request',
-        organizationId: COMMUNITY_ORG_ID // Virtual Organization ID
+        organizationId: COMMUNITY_ORG_ID
       };
 
-      // 1. Ensure the virtual parent organization document exists
       const communityOrgRef = db.collection(ORGANIZATION_COLLECTION_NAME).doc(COMMUNITY_ORG_ID);
       await communityOrgRef.set({ name: 'Community Requests', type: 'Community' }, { merge: true });
 
-      // 2. Write the request to the correct SUBCOLLECTION ('help_requests')
+      // Write to SUBCOLLECTION (Correct path for Volunteer Portal visibility)
       const docRef = await communityOrgRef.collection(HELP_REQUESTS_SUBCOLLECTION_NAME).add(helpRequestData);
 
       return BaseController.success(res, { id: docRef.id, ...helpRequestData }, "Help Request successfully broadcasted.");
@@ -47,28 +43,41 @@ export const citizenController = {
     }
   },
 
-  // 2. RESOLVE REQUEST (Closes the loop from the Civilian Dashboard)
+  // 2. RESOLVE REQUEST (Robustly checks for Old Root Data and New Subcollection Data)
   async resolveRequest(req, res) {
     try {
-        // Request ID is expected from the URL parameter (e.g., /requests/:requestId/resolve)
         const requestId = req.params.requestId; 
-        
         if (!requestId) {
             return BaseController.error(res, "Request ID is missing from URL.", 400);
         }
 
-        // Find the document in the hardcoded virtual organization path
-        const requestRef = db.collection(ORGANIZATION_COLLECTION_NAME)
+        // 1. Define the correct (new) subcollection reference
+        const subcollectionRef = db.collection(ORGANIZATION_COLLECTION_NAME)
                             .doc(COMMUNITY_ORG_ID)
-                            .collection(HELP_REQUESTS_SUBCOLLECTION_NAME) // Consistent subcollection name
+                            .collection(HELP_REQUESTS_SUBCOLLECTION_NAME)
                             .doc(requestId);
 
-        // Check for existence before updating (This is where the 'Not found' error was occurring)
-        const docSnap = await requestRef.get();
-        if (!docSnap.exists) {
-            throw new Error(`Help Request not found at path: ${requestRef.path}`);
-        }
+        // 2. Define the old (stale) root collection reference
+        const rootRef = db.collection(ROOT_LEVEL_COLLECTION_NAME).doc(requestId);
+        
+        let requestRef;
+        let docSnap = await subcollectionRef.get();
 
+        // Check 1: Is it in the new (correct) subcollection?
+        if (docSnap.exists) {
+            requestRef = subcollectionRef;
+        } else {
+            // Check 2: Is it in the old (stale) root collection? (For backward compatibility)
+            docSnap = await rootRef.get();
+            if (docSnap.exists) {
+                requestRef = rootRef;
+            } else {
+                // If not found in either, throw the error with the ID.
+                throw new Error(`Help Request (ID: ${requestId}) not found in expected paths.`);
+            }
+        }
+        
+        // Update the status of the found document
         await requestRef.update({
             status: 'Closed', // Marks the status as resolved
             resolvedByCitizen: true,
