@@ -62,30 +62,27 @@ export const volunteerController = {
   },
 
   // --- AVAILABLE HELP REQUESTS (Global Feed) ---
-async getAvailableHelpRequests(req, res) {
+  async getAvailableHelpRequests(req, res) {
     try {
-        // Since the index is ENABLED, this query should now succeed.
-        const requestsSnapshot = await firestore.collectionGroup('help_requests')
-          .where('status', '==', 'Open') // <--- Data check needed here
-          .get();
+      // NOTE: This Collection Group query requires a Composite Index in Firestore
+      // If you still see the 500 error, ensure the index is created in the Firebase console.
+      
+      const requestsSnapshot = await firestore.collectionGroup('help_requests')
+        .where('status', '==', 'Open')
+        .get();
 
-        const helpRequests = requestsSnapshot.docs.map(doc => {
-            // This mapping must not fail if doc.ref.parent.parent is undefined.
-            const organizationId = doc.ref.parent.parent ? doc.ref.parent.parent.id : 'unknown_org';
-            return { id: doc.id, ...doc.data(), organizationId: organizationId };
-        });
-        
-        // This is a CRITICAL debugging line: Check your server logs immediately after deployment.
-        // If this logs 0, the issue is data criteria (Step 3).
-        console.log(`SUCCESS: Total open help requests returned: ${helpRequests.length}`);
+      const helpRequests = requestsSnapshot.docs.map(doc => {
+        // We get the organizationId from the parent document path
+        return { id: doc.id, ...doc.data(), organizationId: doc.ref.parent.parent.id };
+      });
 
-        return BaseController.success(res, helpRequests);
+      return BaseController.success(res, helpRequests);
     } catch (error) { 
-        console.error("FATAL LOGICAL ERROR AFTER INDEX BUILD:", error);
-        // If the error is not indexing, the logic itself is failing.
-        return BaseController.error(res, "Internal error during data mapping.", 500); 
+        console.error("Firestore Error (getAvailableHelpRequests):", error);
+        // Return a 500 error with a specific message for debugging
+        return BaseController.error(res, "Failed to retrieve help requests. Check Firebase logs for missing index.", 500); 
     }
-},
+  },
 
   // --- SELF ASSIGN (Claim a Help Request) ---
   async selfAssignToHelpRequest(req, res) {
