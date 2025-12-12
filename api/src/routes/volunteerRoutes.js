@@ -20,6 +20,9 @@ router.patch('/assignments/:assignmentId', volunteerController.updateAssignmentS
 router.get('/help-requests', volunteerController.getAvailableHelpRequests);   // View global "Help Wanted" feed
 router.post('/self-assign', volunteerController.selfAssignToHelpRequest);  // Claim a task
 
+// Linked Organizations (Fixes 404 error from frontend)
+router.get('/organizations', volunteerController.getLinkedOrganizations); 
+
 // Missions (History)
 router.get('/missions', volunteerController.getMissionHistory);
 

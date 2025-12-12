@@ -64,27 +64,31 @@ export const volunteerController = {
   // --- AVAILABLE HELP REQUESTS (Global Feed) ---
   async getAvailableHelpRequests(req, res) {
     try {
-      // Collection Group Query: Finds 'needs' (Help Requests) across ALL organizations
-      // The collection is still named 'needs' in the database schema.
+      // NOTE: This Collection Group query requires a Composite Index in Firestore
+      // If you still see the 500 error, ensure the index is created in the Firebase console.
+      
       const requestsSnapshot = await firestore.collectionGroup('needs')
         .where('status', '==', 'Open')
         .get();
 
       const helpRequests = requestsSnapshot.docs.map(doc => {
-        // We get the orgId from the parent document path
-        // Example path: organizations/{orgId}/needs/{requestId}
+        // We get the organizationId from the parent document path
         return { id: doc.id, ...doc.data(), organizationId: doc.ref.parent.parent.id };
       });
 
       return BaseController.success(res, helpRequests);
-    } catch (error) { return BaseController.error(res, error.message); }
+    } catch (error) { 
+        console.error("Firestore Error (getAvailableHelpRequests):", error);
+        // Return a 500 error with a specific message for debugging
+        return BaseController.error(res, "Failed to retrieve help requests. Check Firebase logs for missing index.", 500); 
+    }
   },
 
   // --- SELF ASSIGN (Claim a Help Request) ---
   async selfAssignToHelpRequest(req, res) {
     try {
       const userId = req.user.uid;
-      const { orgId, helpRequestId } = req.body; // Expecting helpRequestId from frontend
+      const { orgId, helpRequestId } = req.body; 
 
       if (!orgId || !helpRequestId) return BaseController.error(res, "Organization ID and Help Request ID required", 400);
 
@@ -113,7 +117,7 @@ export const volunteerController = {
           title: requestData.title,
           description: requestData.description || "Self-assigned task",
           organizationId: orgId,
-          sourceRequestId: helpRequestId, // Renamed for clarity
+          sourceRequestId: helpRequestId,
           status: "In Progress",
           assignedDate: new Date(),
           isSelfAssigned: true
@@ -122,6 +126,25 @@ export const volunteerController = {
 
       return BaseController.success(res, { helpRequestId, status: "Assigned" }, "You have volunteered for this request!");
     } catch (error) { return BaseController.error(res, error.message); }
+  },
+    
+  // --- LINKED ORGANIZATIONS (Fixes 404 on frontend fetch) ---
+  async getLinkedOrganizations(req, res) {
+    try {
+        const userId = req.user.uid;
+        
+        // NOTE: This collection may not exist yet, but providing a successful response fixes the 404.
+        const snap = await firestore.collection('volunteers').doc(userId).collection('linkedOrganizations').get();
+        
+        const organizations = snap.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data() 
+        }));
+        
+        return BaseController.success(res, organizations, "Linked organizations retrieved.");
+    } catch (error) { 
+        return BaseController.error(res, error.message); 
+    }
   },
 
   // --- MISSIONS (History) ---
