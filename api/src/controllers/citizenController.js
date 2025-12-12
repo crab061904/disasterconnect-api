@@ -4,7 +4,8 @@ import { db } from "../firebaseAdmin.js";
 
 // --- Database Path Constants ---
 const ORGANIZATION_COLLECTION_NAME = 'organizations';
-const HELP_REQUESTS_SUBCOLLECTION_NAME = 'help_requests';
+// ⭐ CONSISTENCY CHECK: Use the same name as the Collection Group query in volunteerController.js
+const HELP_REQUESTS_SUBCOLLECTION_NAME = 'help_requests'; 
 const COMMUNITY_ORG_ID = 'community_requests'; 
 
 export const citizenController = {
@@ -17,9 +18,10 @@ export const citizenController = {
       const helpRequestData = {
         disasterId: disasterId || null, 
         type,
+        // Ensure fields are saved safely (no undefined values)
         description: description || details || "No description provided",
         location,
-        // ⭐ CRITICAL FIX: Ensure status is 'Open' for immediate volunteer visibility
+        // CRITICAL FIX: Status is immediately 'Open' for volunteer visibility
         status: status || 'Open', 
         volunteersAssigned: volunteersAssigned || 0,
         volunteersNeeded: volunteersNeeded || 1,
@@ -47,27 +49,27 @@ export const citizenController = {
   // 2. RESOLVE REQUEST (Closes the loop from the Civilian Dashboard)
   async resolveRequest(req, res) {
     try {
-        // The request ID is passed via the URL parameter in the route definition
+        // Grab ID from URL params (default route handling)
         const requestId = req.params.requestId; 
         
         if (!requestId) {
             return BaseController.error(res, "Request ID is missing from URL.", 400);
         }
 
-        // Find the document in the correct subcollection path
+        // Find the document in the correct subcollection path
         const requestRef = db.collection(ORGANIZATION_COLLECTION_NAME)
                             .doc(COMMUNITY_ORG_ID)
                             .collection(HELP_REQUESTS_SUBCOLLECTION_NAME)
                             .doc(requestId);
 
-        // Check for existence before updating (prevents 5 NOT_FOUND error)
-        const docSnap = await requestRef.get();
-        if (!docSnap.exists) {
-            throw new Error(`Help Request not found at path: ${requestRef.path}`);
-        }
+        // Check for existence before updating
+        const docSnap = await requestRef.get();
+        if (!docSnap.exists) {
+            throw new Error(`Help Request not found at path: ${requestRef.path}`);
+        }
 
         await requestRef.update({
-            status: 'Closed', // Marks the status as resolved, making the civilian "safe"
+            status: 'Closed', // Marks the status as resolved
             resolvedByCitizen: true,
             updatedAt: new Date()
         });
@@ -76,15 +78,15 @@ export const citizenController = {
 
     } catch (error) {
         console.error("Error resolving request:", error);
-        // This specific error helps the developer diagnose if the path is wrong
         return BaseController.error(res, error.message, 500); 
     }
   },
   
+  // 3. GET MY ACTIVE REQUESTS
   async getMyActiveRequests(req, res) {
     try {
       const userId = req.user.uid;
-      // NOTE: Assuming HelpRequest.getByUser queries the subcollections (e.g., uses Collection Group internally)
+      // NOTE: Assuming HelpRequest.getByUser correctly queries based on the requestedBy field
       const requests = await HelpRequest.getByUser(userId); 
       return BaseController.success(res, requests);
     } catch (error) {
@@ -92,6 +94,7 @@ export const citizenController = {
     }
   },
 
+  // 4. GET ALL CENTERS
   async getAllCenters(req, res) {
     try {
       const centers = await EvacuationCenter.getAllActive();
