@@ -16,9 +16,9 @@ router.get('/availability', volunteerController.getMyAvailability);
 router.get('/assignments', volunteerController.getAssignments);
 router.patch('/assignments/:assignmentId', volunteerController.updateAssignmentStatus);
 
-// Open Needs & Self Assignment
-router.get('/needs', volunteerController.getOpenNeeds);       // View global "Help Wanted" feed
-router.post('/self-assign', volunteerController.selfAssign);  // Claim a task
+// Open Help Requests & Self Assignment
+router.get('/help-requests', volunteerController.getAvailableHelpRequests);   // View global "Help Wanted" feed
+router.post('/self-assign', volunteerController.selfAssignToHelpRequest);  // Claim a task
 
 // Missions (History)
 router.get('/missions', volunteerController.getMissionHistory);
