@@ -4,13 +4,16 @@ import { db } from "../firebaseAdmin.js";
 
 // --- Database Path Constants ---
 const ORGANIZATION_COLLECTION_NAME = 'organizations';
-// ⭐ CONSISTENCY CHECK: Use the same name as the Collection Group query in volunteerController.js
-const HELP_REQUESTS_SUBCOLLECTION_NAME = 'help_requests'; 
+
+// ⭐ CRITICAL FIX: The name must be consistently changed to the correct subcollection name.
+// Assuming your documents are actually saved under 'needs' in the database.
+const HELP_REQUESTS_SUBCOLLECTION_NAME = 'needs'; 
+
 const COMMUNITY_ORG_ID = 'community_requests'; 
 
 export const citizenController = {
   
-  // 1. CREATE REQUEST (Sets status to 'Open' immediately)
+  // 1. CREATE REQUEST (Updates path to use the correct constant)
   createRequest: async (req, res) => {
     try {
       const { disasterId, type, description, details, location, status, volunteersAssigned, volunteersNeeded } = req.body;
@@ -18,10 +21,8 @@ export const citizenController = {
       const helpRequestData = {
         disasterId: disasterId || null, 
         type,
-        // Ensure fields are saved safely (no undefined values)
         description: description || details || "No description provided",
         location,
-        // CRITICAL FIX: Status is immediately 'Open' for volunteer visibility
         status: status || 'Open', 
         volunteersAssigned: volunteersAssigned || 0,
         volunteersNeeded: volunteersNeeded || 1,
@@ -35,7 +36,7 @@ export const citizenController = {
       const communityOrgRef = db.collection(ORGANIZATION_COLLECTION_NAME).doc(COMMUNITY_ORG_ID);
       await communityOrgRef.set({ name: 'Community Requests', type: 'Community' }, { merge: true });
 
-      // 2. Write the request to the SUBCOLLECTION
+      // 2. Write the request to the SUBCOLLECTION ('needs')
       const docRef = await communityOrgRef.collection(HELP_REQUESTS_SUBCOLLECTION_NAME).add(helpRequestData);
 
       return BaseController.success(res, { id: docRef.id, ...helpRequestData }, "Help Request successfully broadcasted.");
@@ -46,30 +47,31 @@ export const citizenController = {
     }
   },
 
-  // 2. RESOLVE REQUEST (Closes the loop from the Civilian Dashboard)
+  // 2. RESOLVE REQUEST (Fixes the lookup path)
   async resolveRequest(req, res) {
     try {
-        // Grab ID from URL params (default route handling)
+        // Grab ID from URL params
         const requestId = req.params.requestId; 
         
         if (!requestId) {
             return BaseController.error(res, "Request ID is missing from URL.", 400);
         }
 
-        // Find the document in the correct subcollection path
+        // Find the document in the CORRECT subcollection path ('needs')
         const requestRef = db.collection(ORGANIZATION_COLLECTION_NAME)
                             .doc(COMMUNITY_ORG_ID)
-                            .collection(HELP_REQUESTS_SUBCOLLECTION_NAME)
+                            .collection(HELP_REQUESTS_SUBCOLLECTION_NAME) // <-- NOW POINTS TO 'needs'
                             .doc(requestId);
 
         // Check for existence before updating
         const docSnap = await requestRef.get();
         if (!docSnap.exists) {
-            throw new Error(`Help Request not found at path: ${requestRef.path}`);
+            // Include a helpful error if it fails
+            throw new Error(`Help Request not found at expected path: ${requestRef.path}`);
         }
 
         await requestRef.update({
-            status: 'Closed', // Marks the status as resolved
+            status: 'Closed', 
             resolvedByCitizen: true,
             updatedAt: new Date()
         });
@@ -82,11 +84,10 @@ export const citizenController = {
     }
   },
   
-  // 3. GET MY ACTIVE REQUESTS
   async getMyActiveRequests(req, res) {
     try {
       const userId = req.user.uid;
-      // NOTE: Assuming HelpRequest.getByUser correctly queries based on the requestedBy field
+      // NOTE: Assuming HelpRequest.getByUser queries the subcollections (e.g., uses Collection Group internally)
       const requests = await HelpRequest.getByUser(userId); 
       return BaseController.success(res, requests);
     } catch (error) {
@@ -94,7 +95,6 @@ export const citizenController = {
     }
   },
 
-  // 4. GET ALL CENTERS
   async getAllCenters(req, res) {
     try {
       const centers = await EvacuationCenter.getAllActive();
