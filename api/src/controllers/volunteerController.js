@@ -4,6 +4,7 @@ import { BaseController } from "./BaseController.js";
 // --- Database Collection Name Constant ---
 // NOTE: Use the correct subcollection name confirmed in your database
 const HELP_REQUESTS_COLLECTION_NAME = 'help_requests'; 
+const ORGANIZATION_COLLECTION_NAME = 'organizations'; 
 
 export const volunteerController = {
   
@@ -52,7 +53,7 @@ export const volunteerController = {
 
   async updateAssignmentStatus(req, res) {
     // NOTE: This function is used for general status updates, but we will use the new
-    // `completeAssignment` function below for final resolution of a Help Request.
+    // `completeAssignment` function below for final resolution of a Help Request.
     try {
       const userId = req.user.uid;
       const { assignmentId } = req.params;
@@ -66,80 +67,78 @@ export const volunteerController = {
       return BaseController.success(res, { assignmentId, status }, "Assignment updated");
     } catch (error) { return BaseController.error(res, error.message); }
   },
-  
-  // ⭐ NEW FUNCTION: Complete Assignment and Close Help Request (Fulfilled Loop)
-  async completeAssignment(req, res) {
-    const userId = req.user.uid;
-    const { assignmentId, helpRequestId, orgId } = req.body;
+  
+  // ⭐ NEW FUNCTION: Complete Assignment and Close Help Request (Fulfilled Loop)
+  async completeAssignment(req, res) {
+    const userId = req.user.uid;
+    // NOTE: We assume the client sends the assignmentId via params/body, and the request IDs via body.
+    const assignmentId = req.params.assignmentId || req.body.assignmentId;
+    const { helpRequestId, orgId } = req.body;
 
-    if (!assignmentId || !helpRequestId || !orgId) {
-        return BaseController.error(res, "Missing assignment, help request, or organization IDs.", 400);
-    }
-    
-    // 1. References for the transaction
-    const assignmentRef = firestore.collection('volunteers').doc(userId).collection('assignments').doc(assignmentId);
-    
-    // The original Help Request document that the civilian is tracking
-    const helpRequestRef = firestore.collection('organizations').doc(orgId).collection(HELP_REQUESTS_COLLECTION_NAME).doc(helpRequestId);
+    if (!assignmentId || !helpRequestId || !orgId) {
+        return BaseController.error(res, "Missing assignment, help request, or organization IDs.", 400);
+    }
+    
+    // 1. References for the transaction
+    const assignmentRef = firestore.collection('volunteers').doc(userId).collection('assignments').doc(assignmentId);
+    
+    // The original Help Request document that the civilian is tracking
+    const helpRequestRef = firestore.collection(ORGANIZATION_COLLECTION_NAME).doc(orgId).collection(HELP_REQUESTS_COLLECTION_NAME).doc(helpRequestId);
 
-    try {
-        await firestore.runTransaction(async (t) => {
-            
-            // Check if the request exists
-            const requestDoc = await t.get(helpRequestRef);
-            if (!requestDoc.exists) throw new Error("Original Help Request not found.");
+    try {
+        await firestore.runTransaction(async (t) => {
+            
+            // Check if the request exists
+            const requestDoc = await t.get(helpRequestRef);
+            if (!requestDoc.exists) throw new Error("Original Help Request not found.");
 
-            // 2. Mark Volunteer Assignment as Completed
-            t.update(assignmentRef, { 
-                status: 'Completed', 
-                completionDate: new Date(),
-                completedBy: userId
-            });
+            // 2. Mark Volunteer Assignment as Completed
+            t.update(assignmentRef, { 
+                status: 'Completed', 
+                completionDate: new Date(),
+                completedBy: userId
+            });
 
-            // 3. Mark Original Help Request as Closed (This resolves the Civilian's need)
-            t.update(helpRequestRef, { 
-                status: 'Closed', 
-                closedByVolunteer: true, // Flag for tracking source of closure
-                closedDate: new Date() 
-            });
-            
-            // NOTE: The Civilian Dashboard logic (CitizenDashboard.tsx) now checks for 
-            // active requests. When the status changes to 'Closed', the civilian is 
-            // implicitly marked "Safe" / "No active requests."
-        });
+            // 3. Mark Original Help Request as Closed (This resolves the Civilian's need)
+            t.update(helpRequestRef, { 
+                status: 'Closed', 
+                closedByVolunteer: true, // Flag for tracking source of closure
+                closedDate: new Date() 
+            });
+            
+        });
 
-        return BaseController.success(res, { assignmentId, helpRequestId }, "Assignment successfully completed and Help Request closed.");
+        return BaseController.success(res, { assignmentId, helpRequestId }, "Assignment successfully completed and Help Request closed.");
 
-    } catch (error) {
-        console.error("Transaction failed during assignment completion:", error);
-        return BaseController.error(res, error.message);
-    }
-  },
+    } catch (error) {
+        console.error("Transaction failed during assignment completion:", error);
+        return BaseController.error(res, error.message);
+    }
+  },
 
 
   // --- AVAILABLE HELP REQUESTS (Global Feed) ---
   async getAvailableHelpRequests(req, res) {
     try {
-      // NOTE: This Collection Group query requires a Collection Group Index on 'help_requests' with 'status' field.
       
       const requestsSnapshot = await firestore.collectionGroup(HELP_REQUESTS_COLLECTION_NAME)
         .where('status', '==', 'Open')
         .get();
 
-      const helpRequests = requestsSnapshot.docs.map(doc => {
+      const helpRequests = requestsSnapshot.docs.map(doc => {
         // Safely retrieve the parent ID (Organization ID)
         const organizationId = doc.ref.parent?.parent?.id || 'unknown_org'; 
         const data = doc.data();
 
         return { 
             id: doc.id, 
-          // Safely map required fields
+          // Safely map required fields
             title: data.title || 'Untitled Request', 
             organizationId: organizationId,
             ...data 
         };
       });
-      
+      
       return BaseController.success(res, helpRequests);
     } catch (error) { 
         console.error("Firestore Error (getAvailableHelpRequests):", error);
@@ -156,8 +155,8 @@ export const volunteerController = {
 
       if (!orgId || !helpRequestId) return BaseController.error(res, "Organization ID and Help Request ID required", 400);
 
-      // ⭐ CRITICAL FIX: Use correct collection name (help_requests)
-      const requestRef = firestore.collection('organizations').doc(orgId).collection(HELP_REQUESTS_COLLECTION_NAME).doc(helpRequestId);
+      // Use the correct collection name
+      const requestRef = firestore.collection(ORGANIZATION_COLLECTION_NAME).doc(orgId).collection(HELP_REQUESTS_COLLECTION_NAME).doc(helpRequestId);
 
       // Transaction to prevent over-subscribing
       await firestore.runTransaction(async (t) => {
@@ -172,20 +171,21 @@ export const volunteerController = {
         const newCount = (requestData.volunteersAssigned || 0) + 1;
         t.update(requestRef, { 
           volunteersAssigned: newCount,
-          // Set assignment status to 'In Progress' immediately on the Help Request side
+          // Set Help Request status to 'In Progress' immediately so the civilian sees activity
           status: 'In Progress' 
         });
 
         // Add to Volunteer's assignments
         const assignmentRef = firestore.collection('volunteers').doc(userId).collection('assignments').doc();
         t.set(assignmentRef, {
-          title: requestData.title,
-          description: requestData.description || "Self-assigned task",
-          organizationId: orgId,
-          sourceRequestId: helpRequestId,
-          status: "In Progress",
-          assignedDate: new Date(),
-          isSelfAssigned: true
+            // ⭐ CRITICAL FIX APPLIED: Use || '' to prevent saving 'undefined' to Firestore
+            title: requestData.title || 'Untitled Volunteer Assignment', 
+            description: requestData.description || requestData.details || "Self-assigned task", // Also check 'details' for fallback
+            organizationId: orgId,
+            sourceRequestId: helpRequestId,
+            status: "In Progress",
+            assignedDate: new Date(),
+            isSelfAssigned: true
         });
       });
 
