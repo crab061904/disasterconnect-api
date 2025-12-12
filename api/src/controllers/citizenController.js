@@ -5,7 +5,7 @@ import { db } from "../firebaseAdmin.js";
 
 // --- Database Path Constants ---
 const ORGANIZATION_COLLECTION_NAME = 'organizations';
-const HELP_REQUESTS_SUBCOLLECTION_NAME = 'help_requests'; 
+const HELP_REQUESTS_SUBCOLLECTION_NAME = 'help_requests'; // The subcollection name for new data
 const COMMUNITY_ORG_ID = 'community_requests'; 
 const ROOT_LEVEL_COLLECTION_NAME = 'help_requests';
 
@@ -14,16 +14,21 @@ export const citizenController = {
   // 1. CREATE REQUEST (Accepts and saves coordinates)
   createRequest: async (req, res) => {
     try {
-      // ⭐ FIX: Destructure coordinates from the request body
+      // Destructure all incoming fields
       const { disasterId, type, description, details, location, status, volunteersAssigned, volunteersNeeded, coordinates } = req.body;
+      
+      // Define safe coordinate default
+      const finalCoordinates = coordinates || { lat: 0, lng: 0 };
+      const finalDescription = description || details || "No description provided";
 
       const helpRequestData = {
         disasterId: disasterId || null, 
         type,
-        description: description || details || "No description provided",
+        // Using finalDescription for safety
+        description: finalDescription, 
         location,
-        // ⭐ FIX: Save coordinates object to the database
-        coordinates: coordinates || { lat: 0, lng: 0 }, 
+        // Save coordinates object
+        coordinates: finalCoordinates, 
         status: status || 'Open', 
         volunteersAssigned: volunteersAssigned || 0,
         volunteersNeeded: volunteersNeeded || 1,
@@ -33,9 +38,11 @@ export const citizenController = {
         organizationId: COMMUNITY_ORG_ID
       };
 
+      // Ensure the parent organization document exists
       const communityOrgRef = db.collection(ORGANIZATION_COLLECTION_NAME).doc(COMMUNITY_ORG_ID);
       await communityOrgRef.set({ name: 'Community Requests', type: 'Community' }, { merge: true });
 
+      // Write the request to the SUBCOLLECTION
       const docRef = await communityOrgRef.collection(HELP_REQUESTS_SUBCOLLECTION_NAME).add(helpRequestData);
 
       return BaseController.success(res, { id: docRef.id, ...helpRequestData }, "Help Request successfully broadcasted.");
@@ -46,7 +53,7 @@ export const citizenController = {
     }
   },
 
-  // 2. RESOLVE REQUEST (Remains the same as its logic is path-finding)
+  // 2. RESOLVE REQUEST (Robustly checks for Old Root Data and New Subcollection Data)
   async resolveRequest(req, res) {
     try {
         const requestId = req.params.requestId; 
