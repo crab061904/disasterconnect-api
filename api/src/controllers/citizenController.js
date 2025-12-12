@@ -9,11 +9,9 @@ const COMMUNITY_ORG_ID = 'community_requests';
 
 export const citizenController = {
   
-  // ⭐ FIX APPLIED HERE: Prioritize the status sent by the client ('Open')
+  // 1. CREATE REQUEST (Sets status to 'Open' immediately)
   createRequest: async (req, res) => {
     try {
-      console.log("Create Request Body:", req.body); 
-
       const { disasterId, type, description, details, location, status, volunteersAssigned, volunteersNeeded } = req.body;
 
       const helpRequestData = {
@@ -21,8 +19,7 @@ export const citizenController = {
         type,
         description: description || details || "No description provided",
         location,
-        // ⭐ CRITICAL FIX: Use 'Open' if status is provided, otherwise default to 'Open'.
-        // This ensures the request is immediately visible to volunteers.
+        // ⭐ CRITICAL FIX: Ensure status is 'Open' for immediate volunteer visibility
         status: status || 'Open', 
         volunteersAssigned: volunteersAssigned || 0,
         volunteersNeeded: volunteersNeeded || 1,
@@ -39,7 +36,7 @@ export const citizenController = {
       // 2. Write the request to the SUBCOLLECTION
       const docRef = await communityOrgRef.collection(HELP_REQUESTS_SUBCOLLECTION_NAME).add(helpRequestData);
 
-      BaseController.success(res, { id: docRef.id, ...helpRequestData }, "Help Request successfully broadcasted.");
+      return BaseController.success(res, { id: docRef.id, ...helpRequestData }, "Help Request successfully broadcasted.");
 
     } catch (error) {
       console.error("Error creating request:", error);
@@ -47,40 +44,47 @@ export const citizenController = {
     }
   },
 
-  // --- NEW FUNCTION: Resolve/Close a request from the civilian side ---
-  async resolveRequest(req, res) {
-    try {
-        const userId = req.user.uid;
-        // The frontend sends the request ID via params/body, but we rely on the ID being in the URL path.
-        const requestId = req.params.requestId || req.body.requestId; 
-        
-        if (!requestId) {
-            return BaseController.error(res, "Request ID is missing.", 400);
+  // 2. RESOLVE REQUEST (Closes the loop from the Civilian Dashboard)
+  async resolveRequest(req, res) {
+    try {
+        // The request ID is passed via the URL parameter in the route definition
+        const requestId = req.params.requestId; 
+        
+        if (!requestId) {
+            return BaseController.error(res, "Request ID is missing from URL.", 400);
+        }
+
+        // Find the document in the correct subcollection path
+        const requestRef = db.collection(ORGANIZATION_COLLECTION_NAME)
+                            .doc(COMMUNITY_ORG_ID)
+                            .collection(HELP_REQUESTS_SUBCOLLECTION_NAME)
+                            .doc(requestId);
+
+        // Check for existence before updating (prevents 5 NOT_FOUND error)
+        const docSnap = await requestRef.get();
+        if (!docSnap.exists) {
+            throw new Error(`Help Request not found at path: ${requestRef.path}`);
         }
 
-        const requestRef = db.collection(ORGANIZATION_COLLECTION_NAME)
-                            .doc(COMMUNITY_ORG_ID)
-                            .collection(HELP_REQUESTS_SUBCOLLECTION_NAME)
-                            .doc(requestId);
+        await requestRef.update({
+            status: 'Closed', // Marks the status as resolved, making the civilian "safe"
+            resolvedByCitizen: true,
+            updatedAt: new Date()
+        });
 
-        await requestRef.update({
-            status: 'Closed',
-            resolvedByCitizen: true,
-            updatedAt: new Date()
-        });
+        return BaseController.success(res, { requestId, status: 'Closed' }, "Help request resolved and closed.");
 
-        return BaseController.success(res, { requestId, status: 'Closed' }, "Help request resolved and closed.");
-
-    } catch (error) {
-        console.error("Error resolving request:", error);
-        return BaseController.error(res, error.message);
-    }
-  },
-  
+    } catch (error) {
+        console.error("Error resolving request:", error);
+        // This specific error helps the developer diagnose if the path is wrong
+        return BaseController.error(res, error.message, 500); 
+    }
+  },
+  
   async getMyActiveRequests(req, res) {
     try {
       const userId = req.user.uid;
-      // NOTE: Assuming HelpRequest.getByUser is now smart enough to query the subcollections
+      // NOTE: Assuming HelpRequest.getByUser queries the subcollections (e.g., uses Collection Group internally)
       const requests = await HelpRequest.getByUser(userId); 
       return BaseController.success(res, requests);
     } catch (error) {
