@@ -67,7 +67,7 @@ export const volunteerController = {
       // NOTE: This Collection Group query requires a Composite Index in Firestore
       // If you still see the 500 error, ensure the index is created in the Firebase console.
       
-      const requestsSnapshot = await firestore.collectionGroup('needs')
+      const requestsSnapshot = await firestore.collectionGroup('help_requests')
         .where('status', '==', 'Open')
         .get();
 
