@@ -5,29 +5,27 @@ import { db } from "../firebaseAdmin.js";
 
 // --- Database Path Constants ---
 const ORGANIZATION_COLLECTION_NAME = 'organizations';
-const HELP_REQUESTS_SUBCOLLECTION_NAME = 'help_requests'; // The subcollection name for new data
+const HELP_REQUESTS_SUBCOLLECTION_NAME = 'help_requests'; 
 const COMMUNITY_ORG_ID = 'community_requests'; 
-const ROOT_LEVEL_COLLECTION_NAME = 'help_requests';
+const ROOT_LEVEL_COLLECTION_NAME = 'help_requests'; // Same as the subcollection name constant
 
 export const citizenController = {
   
-  // 1. CREATE REQUEST (Accepts and saves coordinates)
+  // 1. CREATE REQUEST (Remains the same - writes correctly to subcollection)
   createRequest: async (req, res) => {
     try {
       // Destructure all incoming fields
       const { disasterId, type, description, details, location, status, volunteersAssigned, volunteersNeeded, coordinates } = req.body;
-      
-      // Define safe coordinate default
-      const finalCoordinates = coordinates || { lat: 0, lng: 0 };
-      const finalDescription = description || details || "No description provided";
+      
+      // Define safe coordinate default
+      const finalCoordinates = coordinates || { lat: 0, lng: 0 };
+      const finalDescription = description || details || "No description provided";
 
       const helpRequestData = {
         disasterId: disasterId || null, 
         type,
-        // Using finalDescription for safety
         description: finalDescription, 
         location,
-        // Save coordinates object
         coordinates: finalCoordinates, 
         status: status || 'Open', 
         volunteersAssigned: volunteersAssigned || 0,
@@ -53,7 +51,7 @@ export const citizenController = {
     }
   },
 
-  // 2. RESOLVE REQUEST (Robustly checks for Old Root Data and New Subcollection Data)
+  // 2. RESOLVE REQUEST (Remains the same - handles both old root and new subcollection paths)
   async resolveRequest(req, res) {
     try {
         const requestId = req.params.requestId; 
@@ -102,15 +100,40 @@ export const citizenController = {
     }
   },
   
-  // 3. GET MY ACTIVE REQUESTS
+  // 3. GET MY ACTIVE REQUESTS (NEW ROBUST IMPLEMENTATION)
   async getMyActiveRequests(req, res) {
     try {
       const userId = req.user.uid;
-      // NOTE: Assuming HelpRequest.getByUser correctly queries based on the requestedBy field
-      const requests = await HelpRequest.getByUser(userId); 
-      return BaseController.success(res, requests);
+      let allRequests = [];
+
+      // A. Query the new subcollection path
+      const subcollectionSnap = await db.collection(ORGANIZATION_COLLECTION_NAME)
+        .doc(COMMUNITY_ORG_ID)
+        .collection(HELP_REQUESTS_SUBCOLLECTION_NAME)
+        .where('requestedBy', '==', userId)
+        .orderBy('createdAt', 'desc')
+        .get();
+
+      allRequests = allRequests.concat(subcollectionSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      
+      // B. Query the old root collection path
+      const rootSnap = await db.collection(ROOT_LEVEL_COLLECTION_NAME)
+        .where('requestedBy', '==', userId)
+        .orderBy('createdAt', 'desc')
+        .get();
+      
+      allRequests = allRequests.concat(rootSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      
+      // Remove duplicates if any were somehow captured twice (e.g., if a document was moved)
+      const uniqueRequests = allRequests.filter((request, index, self) => 
+          index === self.findIndex(r => r.id === request.id)
+      );
+
+      return BaseController.success(res, uniqueRequests);
+
     } catch (error) {
-      return BaseController.error(res, error.message);
+      console.error("Error getting active requests:", error);
+      return BaseController.error(res, "Failed to retrieve active requests: " + error.message);
     }
   },
 
